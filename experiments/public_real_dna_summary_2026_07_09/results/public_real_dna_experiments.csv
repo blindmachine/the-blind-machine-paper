@@ -1,0 +1,5 @@
+experiment,public_source,samples,variants_or_queries,application,primary_result,paper_evidence_url
+E5 AF panel,IGSR/1000 Genomes Phase 3 chr22,10,12,allele_frequency_count; allele_frequency_with_variance,exact first/second moments; mean abs AF delta vs IGSR global 0.0609,(local run; artifacts under real_human_dna_igsr_2026_07_09/results)
+E6 AF/FST panel,IGSR/1000 Genomes Phase 3 chr22,50,24,allele_frequency_count; allele_frequency_with_variance,max FST-like=0.1363; suppressed rows=624,https://blindmachine.org/verify/paper/public-genomics-e6-af-fst
+E7 Beacon policy,IGSR/1000 Genomes Phase 3 chr22,25,40,allele_frequency_count plus release-policy harness,adjacent N=25 vs 24 release-risk comparison,https://blindmachine.org/verify/paper/public-genomics-e7-beacon-policy
+E8 LD window,IGSR/1000 Genomes Phase 3 chr22,25,11,genotype_pair_ld draft application,max r2=1.0000; exact moments match oracle,https://blindmachine.org/verify/paper/public-genomics-e8-ld-window

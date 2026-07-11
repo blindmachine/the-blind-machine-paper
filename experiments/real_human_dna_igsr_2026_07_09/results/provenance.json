@@ -1,0 +1,123 @@
+{
+  "study": "real_human_dna_igsr_2026_07_09",
+  "accessed_on_utc": "2026-07-09",
+  "source": {
+    "panel_url": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_samples_v3.20130502.ALL.panel",
+    "vcf_url": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz",
+    "region": "22:16050000-17000000",
+    "genome_build": "GRCh37",
+    "release": "1000 Genomes Project Phase 3 integrated callset, 20130502",
+    "data_access_pattern": "bcftools remote query of a bounded chr22 interval; the subset VCF and index cache are kept under ignored work/",
+    "data_reuse_statement": "IGSR/1000 Genomes data is publicly available without embargo; users must consult IGSR data reuse statements and cite associated publications.",
+    "global_af_filter": {
+      "min": 0.05,
+      "max": 0.95
+    },
+    "sample_selection_rule": "take the first two samples encountered in the 20130502 panel for each super-population in order EUR, EAS, AMR, AFR, SAS",
+    "variant_selection_rule": "within the chr22 interval, keep the first 12 complete-call biallelic SNPs with IGSR global AF between 0.05 and 0.95 and nonzero/nonfixed alternate-allele count in the selected ten-sample cohort",
+    "bcftools_filters": [
+      "-m2 -M2",
+      "-v snps",
+      "-i 'AF>0.05 && AF<0.95'"
+    ]
+  },
+  "sample_count": 10,
+  "variant_count": 12,
+  "selected_samples": [
+    {
+      "sample_id": "HG00096",
+      "population": "GBR",
+      "super_population": "EUR",
+      "gender": "male"
+    },
+    {
+      "sample_id": "HG00097",
+      "population": "GBR",
+      "super_population": "EUR",
+      "gender": "female"
+    },
+    {
+      "sample_id": "HG00403",
+      "population": "CHS",
+      "super_population": "EAS",
+      "gender": "male"
+    },
+    {
+      "sample_id": "HG00404",
+      "population": "CHS",
+      "super_population": "EAS",
+      "gender": "female"
+    },
+    {
+      "sample_id": "HG00551",
+      "population": "PUR",
+      "super_population": "AMR",
+      "gender": "female"
+    },
+    {
+      "sample_id": "HG00553",
+      "population": "PUR",
+      "super_population": "AMR",
+      "gender": "male"
+    },
+    {
+      "sample_id": "HG01583",
+      "population": "PJL",
+      "super_population": "SAS",
+      "gender": "male"
+    },
+    {
+      "sample_id": "HG01586",
+      "population": "PJL",
+      "super_population": "SAS",
+      "gender": "male"
+    },
+    {
+      "sample_id": "HG01879",
+      "population": "ACB",
+      "super_population": "AFR",
+      "gender": "male"
+    },
+    {
+      "sample_id": "HG01880",
+      "population": "ACB",
+      "super_population": "AFR",
+      "gender": "female"
+    }
+  ],
+  "applications": [
+    "allele_frequency_count",
+    "allele_frequency_with_variance"
+  ],
+  "checks": {
+    "count_matches_cleartext": true,
+    "variance_sum_matches_cleartext": true,
+    "variance_sumsq_matches_cleartext": true,
+    "n_contributors": 10,
+    "variance_n_contributors": 10
+  },
+  "summary_stats": {
+    "mean_abs_delta_vs_igsr_global_af": 0.06085264166666666,
+    "mean_heterozygote_rate": 0.3083333333333333,
+    "mean_dosage_variance": 0.25416666666666665
+  },
+  "tool_versions": {
+    "python": "3.11.5",
+    "bcftools": "bcftools 1.22"
+  },
+  "work_artifacts": {
+    "candidate_subset_vcf_sha256": "sha256:f1661876de9a5e9911c590832d7384cb864b980f512a1129366d161375178098",
+    "sample_panel_sha256": "sha256:b4023dc6ee2d62ee89c8d4d347db4d348e65518d66d346574cdae7a4bbd76858"
+  },
+  "ethics_boundary": {
+    "data_type": "publicly available human genotype VCF subset under IGSR/1000G terms",
+    "committed_outputs": "aggregate-only allele-frequency and moment summaries",
+    "ignored_outputs": "per-sample genotype vectors, subset VCF, remote index cache, and runtime diagnostics under work/",
+    "small_cell_policy": "group-level allele counts and frequencies are suppressed when n < 5",
+    "limitations": [
+      "n=10 toy workflow, not a population estimate",
+      "no medical or clinical interpretation",
+      "public genomic data is not anonymous and still carries re-identification risk"
+    ]
+  }
+}

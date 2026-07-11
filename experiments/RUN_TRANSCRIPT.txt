@@ -1,0 +1,126 @@
+######## bash run_all.sh (fast profile) ########
+date: Wed Jul  8 00:22:18 PDT 2026
+[setup] materializing sealed per-application environments (uv sync --frozen)…
+  · allele_frequency_count  env already sealed
+  · carrier_count  env already sealed
+  · cohort_histogram  env already sealed
+  · polygenic_score_aggregate  env already sealed
+  · allele_frequency_with_variance  env already sealed
+  · genotype_phenotype_covariance  env already sealed
+[setup] installing bundles into the offline application cache (/Users/barisozmen/development/github/barisozmen/rails_blindmachine/docs/paper/experiments/.blind-home/applications)…
+[setup] done. Six bundles installed offline; run: bash run_all.sh
+[E1] two-tier BFV exactness taxonomy — six applications, N=20 L=10, 128-bit, seed 42
+  · e1__allele_frequency_count  (allele_frequency_count  --n 20 --length 10 --security 128)
+  · e1__carrier_count  (carrier_count  --n 20 --length 10 --security 128)
+  · e1__cohort_histogram  (cohort_histogram  --n 20 --length 10 --security 128)
+  · e1__polygenic_score_aggregate  (polygenic_score_aggregate  --n 20 --length 10 --security 128)
+  · e1__allele_frequency_with_variance  (allele_frequency_with_variance  --n 20 --length 10 --security 128)
+  · e1__genotype_phenotype_covariance  (genotype_phenotype_covariance  --n 20 --length 10 --security 128)
+[E1] done → results/raw/e1__*.json
+[E4] differencing demonstration — allele_frequency_count, N=50, seed 7 (attack seed)
+[E4] done → results/raw/e4__differencing.json
+========================================================================
+The Blind Machine — experiment verification (machine-independent invariants)
+========================================================================
+[E1] two-tier BFV exactness taxonomy (Table 4) + payload-premium source data (Table 5)
+  ✓ INV-1  allele_frequency_count: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-1  carrier_count: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-1  cohort_histogram: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-1  polygenic_score_aggregate: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-1  allele_frequency_with_variance: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-1  genotype_phenotype_covariance: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-2  all 4 additive-BFV applications bit-exact (additive suffices for 4 of 6)
+  ✓ INV-2  both multiplication-supporting-BFV applications bit-exact
+    wrote results/table_b_exactness.csv (6 rows)
+  ✓ INV-3  payload premium ordering additive(262282B) < variance(1310882B) < covariance(2621791B)
+    wrote results/table_c_premium.csv (3 rows)
+[E2] skipped (run e2_security_matrix.sh, or `run_all.sh full`)
+[E3] skipped (run e3_feasibility.sh, or `run_all.sh full`)
+[E4] differencing demonstration (Figure 2)
+  ✓ INV-4  K-vs-K+1 recovers a contributor EXACTLY on an unfrozen cohort
+  ✓ INV-4  recovered vector == target vector (exact individual leak)
+------------------------------------------------------------------------
+RESULT: PASS — all 11 machine-independent invariants hold.
+Paper-facing tables written to results/*.csv
+
+######## bash run_all.sh full ########
+date: Wed Jul  8 00:23:35 PDT 2026
+[setup] materializing sealed per-application environments (uv sync --frozen)…
+  · allele_frequency_count  env already sealed
+  · carrier_count  env already sealed
+  · cohort_histogram  env already sealed
+  · polygenic_score_aggregate  env already sealed
+  · allele_frequency_with_variance  env already sealed
+  · genotype_phenotype_covariance  env already sealed
+[setup] installing bundles into the offline application cache (/Users/barisozmen/development/github/barisozmen/rails_blindmachine/docs/paper/experiments/.blind-home/applications)…
+[setup] done. Six bundles installed offline; run: bash run_all.sh
+[E1] two-tier BFV exactness taxonomy — six applications, N=20 L=10, 128-bit, seed 42
+  · e1__allele_frequency_count  (allele_frequency_count  --n 20 --length 10 --security 128)
+  · e1__carrier_count  (carrier_count  --n 20 --length 10 --security 128)
+  · e1__cohort_histogram  (cohort_histogram  --n 20 --length 10 --security 128)
+  · e1__polygenic_score_aggregate  (polygenic_score_aggregate  --n 20 --length 10 --security 128)
+  · e1__allele_frequency_with_variance  (allele_frequency_with_variance  --n 20 --length 10 --security 128)
+  · e1__genotype_phenotype_covariance  (genotype_phenotype_covariance  --n 20 --length 10 --security 128)
+[E1] done → results/raw/e1__*.json
+[E4] differencing demonstration — allele_frequency_count, N=50, seed 7 (attack seed)
+[E4] done → results/raw/e4__differencing.json
+[E2] security-level matrix — six applications × {128,192,256}, N=20 L=10, seed 42
+  · e2__allele_frequency_count  (allele_frequency_count  --sweep security=128,192,256 n=20 length=10)
+  · e2__carrier_count  (carrier_count  --sweep security=128,192,256 n=20 length=10)
+  · e2__cohort_histogram  (cohort_histogram  --sweep security=128,192,256 n=20 length=10)
+  · e2__polygenic_score_aggregate  (polygenic_score_aggregate  --sweep security=128,192,256 n=20 length=10)
+  · e2__allele_frequency_with_variance  (allele_frequency_with_variance  --sweep security=128,192,256 n=20 length=10)
+  · e2__genotype_phenotype_covariance  (genotype_phenotype_covariance  --sweep security=128,192,256 n=20 length=10)
+[E2] done → results/raw/e2__*.json
+[E3] feasibility sweep — allele_frequency_count, n=20,100 length=10,100, 128-bit, seed 42
+  · e3__afc  (allele_frequency_count  --sweep n=20,100 length=10,100)
+[E3] done → results/raw/e3__afc.json
+========================================================================
+The Blind Machine — experiment verification (machine-independent invariants)
+========================================================================
+[E1] two-tier BFV exactness taxonomy (Table 4) + payload-premium source data (Table 5)
+  ✓ INV-1  allele_frequency_count: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-1  carrier_count: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-1  cohort_histogram: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-1  polygenic_score_aggregate: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-1  allele_frequency_with_variance: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-1  genotype_phenotype_covariance: bit-exact (max_error=0, feasibility=ok)
+  ✓ INV-2  all 4 additive-BFV applications bit-exact (additive suffices for 4 of 6)
+  ✓ INV-2  both multiplication-supporting-BFV applications bit-exact
+    wrote results/table_b_exactness.csv (6 rows)
+  ✓ INV-3  payload premium ordering additive(262282B) < variance(1310882B) < covariance(2621791B)
+    wrote results/table_c_premium.csv (3 rows)
+[E2] security-level matrix 128/192/256 (Table 6)
+  ✓ INV-5  allele_frequency_count@128-bit: bit-exact
+  ✓ INV-5  allele_frequency_count@192-bit: bit-exact
+  ✓ INV-5  allele_frequency_count@256-bit: bit-exact
+  ✓ INV-5  carrier_count@128-bit: bit-exact
+  ✓ INV-5  carrier_count@192-bit: bit-exact
+  ✓ INV-5  carrier_count@256-bit: bit-exact
+  ✓ INV-5  cohort_histogram@128-bit: bit-exact
+  ✓ INV-5  cohort_histogram@192-bit: bit-exact
+  ✓ INV-5  cohort_histogram@256-bit: bit-exact
+  ✓ INV-5  polygenic_score_aggregate@128-bit: bit-exact
+  ✓ INV-5  polygenic_score_aggregate@192-bit: bit-exact
+  ✓ INV-5  polygenic_score_aggregate@256-bit: bit-exact
+  ✓ INV-5  allele_frequency_with_variance@128-bit: bit-exact
+  ✓ INV-5  allele_frequency_with_variance@192-bit: bit-exact
+  ✓ INV-5  allele_frequency_with_variance@256-bit: bit-exact
+  ✓ INV-5  genotype_phenotype_covariance@128-bit: bit-exact
+  ✓ INV-5  genotype_phenotype_covariance@192-bit: bit-exact
+  ✓ INV-5  genotype_phenotype_covariance@256-bit: bit-exact
+    wrote results/security_matrix.csv (18 rows)
+[E3] feasibility sweep (camera-ready curve source)
+  ✓ INV-1  afc N=20 L=10: bit-exact
+  ✓ INV-1  afc N=20 L=100: bit-exact
+  ✓ INV-1  afc N=100 L=10: bit-exact
+  ✓ INV-1  afc N=100 L=100: bit-exact
+    wrote results/feasibility.csv (4 rows)
+[E4] differencing demonstration (Figure 2)
+  ✓ INV-4  K-vs-K+1 recovers a contributor EXACTLY on an unfrozen cohort
+  ✓ INV-4  recovered vector == target vector (exact individual leak)
+------------------------------------------------------------------------
+RESULT: PASS — all 33 machine-independent invariants hold.
+Paper-facing tables written to results/*.csv
+
+ALL DONE: Wed Jul  8 00:28:08 PDT 2026

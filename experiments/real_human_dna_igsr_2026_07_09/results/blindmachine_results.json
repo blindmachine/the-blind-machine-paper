@@ -1,0 +1,128 @@
+{
+  "allele_frequency_count": {
+    "application": "allele_frequency_count",
+    "decoded": {
+      "protocol": "allele_frequency_count",
+      "coordinates_length": 12,
+      "n_contributors": 10,
+      "allele_counts": [
+        4,
+        3,
+        3,
+        1,
+        1,
+        15,
+        5,
+        4,
+        3,
+        4,
+        7,
+        3
+      ],
+      "allele_frequencies": [
+        0.2,
+        0.15,
+        0.15,
+        0.05,
+        0.05,
+        0.75,
+        0.25,
+        0.2,
+        0.15,
+        0.2,
+        0.35,
+        0.15
+      ]
+    },
+    "artifact_sizes": {
+      "public_context_bytes": 1180202,
+      "result_bytes": 262282,
+      "ciphertext_bytes_total": 2622820,
+      "ciphertext_bytes_per_sample": 262282.0
+    }
+  },
+  "allele_frequency_with_variance": {
+    "application": "allele_frequency_with_variance",
+    "decoded": {
+      "protocol": "allele_frequency_with_variance",
+      "coordinates_length": 12,
+      "n_contributors": 10,
+      "sum_g": [
+        4,
+        3,
+        3,
+        1,
+        1,
+        15,
+        5,
+        4,
+        3,
+        4,
+        7,
+        3
+      ],
+      "sum_g2": [
+        4,
+        3,
+        3,
+        1,
+        1,
+        25,
+        7,
+        4,
+        3,
+        4,
+        11,
+        3
+      ],
+      "mean": [
+        0.4,
+        0.3,
+        0.3,
+        0.1,
+        0.1,
+        1.5,
+        0.5,
+        0.4,
+        0.3,
+        0.4,
+        0.7,
+        0.3
+      ],
+      "variance": [
+        0.24,
+        0.21,
+        0.21,
+        0.09,
+        0.09,
+        0.25,
+        0.44999999999999996,
+        0.24,
+        0.21,
+        0.24,
+        0.6100000000000001,
+        0.21
+      ],
+      "allele_frequency": [
+        0.2,
+        0.15,
+        0.15,
+        0.05,
+        0.05,
+        0.75,
+        0.25,
+        0.2,
+        0.15,
+        0.2,
+        0.35,
+        0.15
+      ]
+    },
+    "artifact_sizes": {
+      "public_context_bytes": 9438280,
+      "result_bytes": 2621797,
+      "ciphertext_bytes_total": 13108820,
+      "ciphertext_bytes_per_sample": 1310882.0
+    }
+  }
+}

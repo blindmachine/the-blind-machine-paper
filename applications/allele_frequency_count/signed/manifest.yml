@@ -1,0 +1,73 @@
+# Blind Machine curated protocol bundle — FLAGSHIP.
+#
+# This manifest is the ONLY file the Rails platform parses. The author's pure
+# functions in server.py / local_project_owner.py / local_data_owner.py own the
+# computation; the numbered stage files are kit-owned shims that call them (see
+# docs/rfcs/0002). This file owns the governance + review surface (display
+# metadata + the gate values that let compute be authorized without unpacking the
+# tarball). See docs/protocol_structure.md for the schema and
+# docs/protocol_catalog.md §1 for this protocol's definition.
+name: allele_frequency_count
+version: 1.0.0
+
+builder:
+  type: uv
+  project: env
+
+crypto: tenseal-bfv             # display hint; real deps live in env/uv.lock
+computation: additive_bfv       # pure coordinate-wise homomorphic vector add
+min_contributors: 20
+
+# The published coordinate definition. Every contributor MUST encode against
+# the identical definition or the blind sum is meaningless — that invariant is
+# what folding this manifest into the bundle SHA-256 enforces. For the synthetic
+# v1 demo the coordinate list is generated deterministically from `seed` rather
+# than enumerated inline (see docs/protocol_structure.md: "The manifest may use
+# generated coordinates for synthetic v1 protocols.").
+input:
+  type: integer_vector
+  length: 1000
+  value_domain: [0, 1, 2]       # alt-allele dosage per coordinate; missing -> 0
+  coordinates:
+    kind: synthetic_variants
+    seed: blind-v1-demo-coordinates
+    fields: [chrom, pos, ref, alt]
+
+output:
+  shape: aggregate_count_vector # sum_g in Z^L (+ append-1 sentinel -> N)
+  exactness: exact              # BFV is exact in Z_t; small-int sums never overflow
+  tolerance: 0
+
+release_policy:
+  aggregate_only: true          # only the summed vector is ever decrypted
+  allowed_runs_per_project: 1   # run cap (differencing mitigation, not a defense)
+
+resources:
+  max_memory_mb: 8192
+  max_wall_seconds: 3600
+  max_ciphertext_mb: 512
+
+# Collaboration scenario (docs/rfcs/0002 §4.1): who runs which role's functions.
+# The author writes pure functions grouped BY ROLE into the files below; the
+# numbered stage shims that call them are kit-owned framework code, materialized
+# at run time (never signed into the bundle). `aggregate` = 1 project owner + N
+# data owners.
+scenario:
+  name: aggregate
+  roles:
+    project_owner: { file: local_project_owner.py, functions: [ keygen, decrypt, decode ] }
+    data_owner:    { file: local_data_owner.py,    functions: [ encode, encrypt ] }
+    server:        { file: server.py,              functions: [ compute ] }
+
+# Content-addressing digests. Computed at registry ingest — `bundle` by
+# protocols/hash_bundle.py, `env_lock` over env/uv.lock + env/.python-version +
+# pinned runner metadata. Left null in the committed bundle ON PURPOSE: the
+# canonical bundle digest is computed over the raw bytes of every signed file
+# INCLUDING this manifest, so a computed `bundle` value here would be
+# self-referential (its own input). The authoritative digest instead NAMES the
+# bundle (protocol-<name>@<digest>) and is recorded out-of-band
+# (.blind-signature / DB), never inside the file it would have to hash. See
+# protocols/README.md § "Why the manifest ships null hash placeholders".
+hashes:
+  bundle: null
+  env_lock: null

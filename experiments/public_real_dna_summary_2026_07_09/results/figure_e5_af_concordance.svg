@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="520" viewBox="0 0 560 520">
+<rect width="100%" height="100%" fill="#fbfbf8"/>
+<text x="76" y="28" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#1c2526">E5: encrypted panel allele frequency vs IGSR global</text>
+<line x1="76" y1="58" x2="76" y2="458" stroke="#9aa3a3" stroke-width="1"/>
+<line x1="76" y1="458" x2="532" y2="458" stroke="#9aa3a3" stroke-width="1"/>
+<line x1="76.0" y1="58" x2="76.0" y2="458" stroke="#ecebe4" stroke-width="1"/>
+<line x1="76" y1="458.0" x2="532" y2="458.0" stroke="#ecebe4" stroke-width="1"/>
+<text x="76.0" y="476" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#536264">0</text>
+<text x="68" y="462.0" text-anchor="end" font-family="Arial, sans-serif" font-size="11" fill="#536264">0</text>
+<line x1="190.0" y1="58" x2="190.0" y2="458" stroke="#ecebe4" stroke-width="1"/>
+<line x1="76" y1="358.0" x2="532" y2="358.0" stroke="#ecebe4" stroke-width="1"/>
+<text x="190.0" y="476" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#536264">0.25</text>
+<text x="68" y="362.0" text-anchor="end" font-family="Arial, sans-serif" font-size="11" fill="#536264">0.25</text>
+<line x1="304.0" y1="58" x2="304.0" y2="458" stroke="#ecebe4" stroke-width="1"/>
+<line x1="76" y1="258.0" x2="532" y2="258.0" stroke="#ecebe4" stroke-width="1"/>
+<text x="304.0" y="476" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#536264">0.5</text>
+<text x="68" y="262.0" text-anchor="end" font-family="Arial, sans-serif" font-size="11" fill="#536264">0.5</text>
+<line x1="418.0" y1="58" x2="418.0" y2="458" stroke="#ecebe4" stroke-width="1"/>
+<line x1="76" y1="158.0" x2="532" y2="158.0" stroke="#ecebe4" stroke-width="1"/>
+<text x="418.0" y="476" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#536264">0.75</text>
+<text x="68" y="162.0" text-anchor="end" font-family="Arial, sans-serif" font-size="11" fill="#536264">0.75</text>
+<line x1="532.0" y1="58" x2="532.0" y2="458" stroke="#ecebe4" stroke-width="1"/>
+<line x1="76" y1="58.0" x2="532" y2="58.0" stroke="#ecebe4" stroke-width="1"/>
+<text x="532.0" y="476" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#536264">1</text>
+<text x="68" y="62.0" text-anchor="end" font-family="Arial, sans-serif" font-size="11" fill="#536264">1</text>
+<line x1="76.0" y1="458.0" x2="532.0" y2="58.0" stroke="#9aa3a3" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="349.6" y="234.0" font-family="Arial, sans-serif" font-size="11" fill="#536264">panel = global (y = x)</text>
+<circle cx="127.3" cy="378.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="140.4" cy="398.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="118.8" cy="398.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="109.8" cy="438.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="108.8" cy="438.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="467.1" cy="158.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="151.7" cy="358.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="128.3" cy="378.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="140.0" cy="398.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="128.8" cy="378.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="302.0" cy="318.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<circle cx="137.5" cy="398.0" r="5.5" fill="#2f6f73" fill-opacity="0.82" stroke="#1c2526" stroke-width="0.6"/>
+<text x="304.0" y="504" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#1c2526">IGSR global allele frequency</text>
+<text x="18" y="258.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#1c2526" transform="rotate(-90 18 258.0)">Encrypted panel allele frequency (10 samples)</text>
+<text x="84" y="74" font-family="Arial, sans-serif" font-size="11.5" fill="#536264">12 SNPs · mean |Δ| = 0.0609 · decrypted counts equal the cleartext oracle exactly</text>
+</svg>

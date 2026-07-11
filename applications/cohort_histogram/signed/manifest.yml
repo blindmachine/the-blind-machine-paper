@@ -1,0 +1,90 @@
+# Blind Machine curated protocol bundle — cohort_histogram.
+#
+# This manifest is the ONLY file the Rails platform parses. The author's pure
+# functions in server.py / local_project_owner.py / local_data_owner.py own the
+# computation; the numbered stage files are kit-owned shims that call them (see
+# docs/rfcs/0002). This file owns the governance + review surface (display
+# metadata + the gate values that let compute be authorized without unpacking the
+# tarball). See docs/protocol_structure.md for the schema and
+# docs/protocol_catalog.md §3 for this protocol's definition.
+#
+# cohort_histogram is deliberately NON-GENOMIC: it aggregates a bucketed count
+# over an ordered, published bucket definition (demographic age bands in the v1
+# demo). It reuses the flagship's additive minimal-params BFV loop verbatim to
+# prove the additive primitive is generic beyond genotypes — genomics is the
+# demo domain, not the only possible one.
+name: cohort_histogram
+version: 1.0.0
+
+builder:
+  type: uv
+  project: env
+
+crypto: tenseal-bfv             # display hint; real deps live in env/uv.lock
+computation: additive_bfv       # pure coordinate-wise homomorphic vector add
+min_contributors: 25            # catalog §3 (higher than the flagship's 20)
+
+# The published bucket definition. Every contributor MUST encode their bucket
+# membership against this identical ordered definition or the blind histogram is
+# meaningless — that invariant is what folding this manifest into the bundle
+# SHA-256 enforces. `length` is the number of buckets B; each contribution is a
+# one-hot vector h in {0,1}^B with sum(h)=1. The v1 demo uses ordered categories
+# (demographic age bands); a numeric protocol would instead publish `edges`.
+input:
+  type: onehot_vector
+  length: 10                    # B = number of buckets
+  value_domain: [0, 1]          # one-hot membership; exactly one coordinate is 1
+  constraint: one_hot           # sum(h) = 1 per contributor
+  buckets:
+    kind: ordered_categories    # or `ordered_edges` with `edges: [...]` for numeric bins
+    seed: blind-v1-histogram-buckets
+    labels:                     # the published, ordered bucket definition
+      - "0-9"
+      - "10-19"
+      - "20-29"
+      - "30-39"
+      - "40-49"
+      - "50-59"
+      - "60-69"
+      - "70-79"
+      - "80-89"
+      - "90+"
+
+output:
+  shape: aggregate_count_vector # counts in Z^B (+ append-1 sentinel -> N)
+  exactness: exact              # BFV is exact in Z_t; one-hot sums never overflow
+  tolerance: 0
+
+release_policy:
+  aggregate_only: true          # only the summed histogram is ever decrypted
+  allowed_runs_per_project: 1   # run cap (differencing mitigation, not a defense)
+
+resources:
+  max_memory_mb: 8192
+  max_wall_seconds: 3600
+  max_ciphertext_mb: 512
+
+# Collaboration scenario (docs/rfcs/0002 §4.1): who runs which role's functions.
+# The author writes pure functions grouped BY ROLE into the files below; the
+# numbered stage shims that call them are kit-owned framework code, materialized
+# at run time (never signed into the bundle). `aggregate` = 1 project owner + N
+# data owners.
+scenario:
+  name: aggregate
+  roles:
+    project_owner: { file: local_project_owner.py, functions: [ keygen, decrypt, decode ] }
+    data_owner:    { file: local_data_owner.py,    functions: [ encode, encrypt ] }
+    server:        { file: server.py,              functions: [ compute ] }
+
+# Content-addressing digests. Computed at registry ingest — `bundle` by
+# protocols/hash_bundle.py, `env_lock` over env/uv.lock + env/.python-version +
+# pinned runner metadata. Left null in the committed bundle ON PURPOSE: the
+# canonical bundle digest is computed over the raw bytes of every signed file
+# INCLUDING this manifest, so a computed `bundle` value here would be
+# self-referential (its own input). The authoritative digest instead NAMES the
+# bundle (protocol-<name>@<digest>) and is recorded out-of-band
+# (.blind-signature / DB), never inside the file it would have to hash. See
+# protocols/README.md § "Why the manifest ships null hash placeholders".
+hashes:
+  bundle: null
+  env_lock: null

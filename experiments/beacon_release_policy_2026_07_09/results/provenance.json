@@ -1,0 +1,39 @@
+{
+  "accessed_on_utc": "2026-07-09",
+  "applications": [
+    "allele_frequency_count"
+  ],
+  "base_n": 24,
+  "blindmachine_results": {
+    "base_result_sha256": "sha256:143f18dacf32ae7e75213d9fd130b1d23803bb845b724c2b5e40232daa29711b",
+    "included_result_sha256": "sha256:c4608568bd483c598abc422beca5ad6036c0797e38dac5bce80de1339fbead55"
+  },
+  "included_n": 25,
+  "privacy_boundary": {
+    "committed_outputs": "aggregate policy metrics only",
+    "individual_level_material": "kept under ignored work/",
+    "interpretation": "release-governance demonstration, not an identification workflow"
+  },
+  "source": {
+    "genome_build": "GRCh37",
+    "panel_url": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_samples_v3.20130502.ALL.panel",
+    "region": "22:16050000-17250000",
+    "release": "1000 Genomes Project Phase 3 integrated callset, 20130502",
+    "sample_selection_rule": "take the first five samples encountered for each super-population in order EUR, EAS, AMR, AFR, SAS; use the first selected sample as the held-out adjacent-cohort target",
+    "target_sample_sha256": "sha256:dc3fc49841f4898df563f0961b436b7282c71ac9fe2d4818d9372e0c1ef80e1d",
+    "vcf_url": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz"
+  },
+  "study": "beacon_release_policy_2026_07_09",
+  "target_nonzero_positions": 6,
+  "variant_count": 40,
+  "verification": {
+    "hosted_computation_certificate": {
+      "certificate_url": null,
+      "reason": "This optional public-real-DNA experiment was run locally and has not been submitted to the hosted blindmachine.org computation service, so no /verify/:certificate_hash page exists yet.",
+      "status": "not_published"
+    },
+    "local_reproduction_command": "bash docs/paper/experiments/e7_beacon_release_policy.sh",
+    "paper_evidence_json_url": "https://blindmachine.org/verify/paper/public-genomics-e7-beacon-policy.json",
+    "paper_evidence_url": "https://blindmachine.org/verify/paper/public-genomics-e7-beacon-policy"
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "study": "public_af_fst_2026_07_09",
+  "accessed_on_utc": "2026-07-09",
+  "source": {
+    "panel_url": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_samples_v3.20130502.ALL.panel",
+    "vcf_url": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz",
+    "igsr_data_url": "https://www.internationalgenome.org/data/",
+    "igsr_permission_url": "https://www.internationalgenome.org/faq/do-i-need-permission-to-use-igsr-data-in-my-own-scientific-research/",
+    "igsr_phase3_url": "https://www.internationalgenome.org/data-portal/data-collection/phase3/",
+    "igsr_ftp_release_url": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/",
+    "region": "22:16050000-17000000",
+    "genome_build": "GRCh37",
+    "release": "1000 Genomes Project Phase 3 integrated callset, 20130502",
+    "data_access_pattern": "bcftools remote query of a bounded chr22 interval; the selected sample list, subset VCF, index cache, and per-sample vectors are kept under ignored work/",
+    "data_reuse_statement": "IGSR provides open data to support research; users should consult IGSR terms/data reuse statements and cite associated publications.",
+    "sources_rejected": [
+      {
+        "source": "TCGA/GDC and dbGaP disease cohorts",
+        "reason": "often controlled-access and unnecessary for this public AF panel"
+      },
+      {
+        "source": "NIST Genome in a Bottle",
+        "reason": "excellent benchmark truth data, but not a multi-population cohort suited to cross-population AF/FST-ish summaries"
+      }
+    ],
+    "global_af_filter": {
+      "min": 0.05,
+      "max": 0.95
+    },
+    "source_superpop_af_range_filter": {
+      "min": 0.15,
+      "definition": "max(INFO.AFR_AF, AMR_AF, EAS_AF, EUR_AF, SAS_AF) - min(INFO.AFR_AF, AMR_AF, EAS_AF, EUR_AF, SAS_AF)"
+    },
+    "sample_selection_rule": "for each super-population in order AFR, AMR, EAS, EUR, SAS, take a deterministic round-robin over alphabetically sorted 1000 Genomes population codes, preserving panel order within each population, until 10 samples are selected",
+    "variant_selection_rule": "within the chr22 interval, keep the first 24 complete-call biallelic SNPs with IGSR global AF between 0.05 and 0.95, source super-population AF range >= 0.15, nonzero/nonfixed alternate-allele count in the selected cohort, and at least 200 bp from the prior kept variant",
+    "bcftools_filters": [
+      "-m2 -M2",
+      "-v snps",
+      "-i 'AF>0.05 && AF<0.95'"
+    ]
+  },
+  "sample_count": 50,
+  "variant_count": 24,
+  "selected_sample_counts": {
+    "by_super_population": {
+      "AFR": 10,
+      "AMR": 10,
+      "EAS": 10,
+      "EUR": 10,
+      "SAS": 10
+    },
+    "by_population": {
+      "ACB": 2,
+      "ASW": 2,
+      "BEB": 2,
+      "CDX": 2,
+      "CEU": 2,
+      "CHB": 2,
+      "CHS": 2,
+      "CLM": 3,
+      "ESN": 2,
+      "FIN": 2,
+      "GBR": 2,
+      "GIH": 2,
+      "GWD": 1,
+      "IBS": 2,
+      "ITU": 2,
+      "JPT": 2,
+      "KHV": 2,
+      "LWK": 1,
+      "MSL": 1,
+      "MXL": 3,
+      "PEL": 2,
+      "PJL": 2,
+      "PUR": 2,
+      "STU": 2,
+      "TSI": 2,
+      "YRI": 1
+    },
+    "sample_ids_not_committed": true,
+    "selected_samples_work_path": "work/selected_samples.txt",
+    "selected_samples_sha256": "sha256:ff5c17dfc62bc2d32e01eb9489a80d8aee19c46cd1f03378ee433010c52b7fd3"
+  },
+  "applications": [
+    "allele_frequency_count",
+    "allele_frequency_with_variance"
+  ],
+  "checks": {
+    "count_matches_cleartext": true,
+    "variance_sum_matches_cleartext": true,
+    "variance_sumsq_matches_cleartext": true,
+    "signed_count_aggregate_matches_cleartext": true,
+    "signed_variance_aggregate_sum_matches_cleartext": true,
+    "signed_variance_aggregate_sumsq_matches_cleartext": true,
+    "group_signed_pure_function_checks_passed": true,
+    "small_cell_suppression_passed": true,
+    "n_contributors": 50,
+    "variance_n_contributors": 50
+  },
+  "summary_stats": {
+    "mean_abs_delta_vs_igsr_global_af": 0.031142141666666668,
+    "mean_fst_like": 0.061135919651285266,
+    "max_fst_like": 0.13626373626373603,
+    "mean_source_fst_like": 0.05284281352152129,
+    "mean_dosage_variance": 0.32688333333333336,
+    "suppressed_group_rows": 624
+  },
+  "tool_versions": {
+    "python": "3.11.5",
+    "bcftools": "bcftools 1.22",
+    "curl": "curl 8.7.1 (x86_64-apple-darwin25.0) libcurl/8.7.1 (SecureTransport) LibreSSL/3.3.6 zlib/1.2.12 nghttp2/1.68.0",
+    "tenseal": "0.3.16"
+  },
+  "work_artifacts": {
+    "candidate_subset_vcf_sha256": "sha256:5b21035a9f2a14521ec81260f30ceab4e56b1f8dc6c769c9597ffc7667099397",
+    "sample_panel_sha256": "sha256:b4023dc6ee2d62ee89c8d4d347db4d348e65518d66d346574cdae7a4bbd76858",
+    "raw_vectors_dir": "work/raw_vectors/"
+  },
+  "ethics_boundary": {
+    "data_type": "publicly available human genotype VCF subset under IGSR/1000G terms",
+    "committed_outputs": "aggregate-only allele-frequency, group-frequency, FST-ish, application-output, provenance, and verification summaries",
+    "ignored_outputs": "selected sample IDs, per-sample genotype vectors, subset VCF, remote index cache, and runtime diagnostics under work/",
+    "small_cell_policy": "group-level allele counts, frequencies, source-reference AFs, and deltas are suppressed when n < 10",
+    "limitations": [
+      "small deterministic workflow panel, not a population estimate",
+      "FST-ish values are equal-weight heterozygosity contrasts, not formal inference",
+      "no medical or clinical interpretation",
+      "public genomic data is not anonymous and still carries re-identification risk"
+    ]
+  }
+}

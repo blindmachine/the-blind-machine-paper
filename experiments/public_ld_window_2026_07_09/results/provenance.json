@@ -1,0 +1,91 @@
+{
+  "accessed_on_utc": "2026-07-09",
+  "application": "genotype_pair_ld",
+  "application_status": "draft local application; not yet production signed",
+  "pair_count": 11,
+  "privacy_boundary": {
+    "committed_outputs": "aggregate adjacent-pair LD moments only",
+    "individual_level_material": "kept under ignored work/",
+    "interpretation": "workflow demonstration only; not a reference LD panel"
+  },
+  "sample_count": 25,
+  "selected_sample_ids_committed": false,
+  "source": {
+    "genome_build": "GRCh37",
+    "pair_rule": "adjacent variant pairs in selected coordinate order",
+    "panel_url": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_samples_v3.20130502.ALL.panel",
+    "region": "22:16050000-16900000",
+    "rejected_sources": [
+      {
+        "reason": "controlled-access human genomic data is out of scope",
+        "source": "TCGA/GDC and dbGaP disease cohorts"
+      },
+      {
+        "reason": "single-sample truth sets are not suitable for cohort LD",
+        "source": "Genome in a Bottle"
+      }
+    ],
+    "release": "1000 Genomes Project Phase 3 integrated callset, 20130502",
+    "sample_selection_rule": "take the first five samples encountered for each super-population in order EUR, EAS, AMR, AFR, SAS",
+    "source_pages": {
+      "igsr_data": "https://www.internationalgenome.org/data/",
+      "password": "https://www.internationalgenome.org/faq/do-i-need-a-password-to-access-igsr-data/",
+      "permission": "https://www.internationalgenome.org/faq/do-i-need-permission-to-use-igsr-data-in-my-own-scientific-research/",
+      "phase3": "https://www.internationalgenome.org/category/phase-3/",
+      "release_directory": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/"
+    },
+    "variant_selection_rule": "first complete-call, biallelic, polymorphic SNPs in the chr22 window with IGSR global AF between 0.05 and 0.95",
+    "vcf_url": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz",
+    "why_selected": "IGSR/1000 Genomes Phase 3 is an official public multi-sample human genotype VCF suitable for a small LD workflow demo."
+  },
+  "study": "public_ld_window_2026_07_09",
+  "summary_stats": {
+    "max_r2": 1.0,
+    "mean_r2": 0.20311155092252803
+  },
+  "validation": {
+    "all_exact_moments_match": true,
+    "exact_moment_matches": {
+      "sum_a": true,
+      "sum_a2": true,
+      "sum_ab": true,
+      "sum_b": true,
+      "sum_b2": true
+    }
+  },
+  "variant_count": 12,
+  "verification": {
+    "blindmachine_org": {
+      "local_verification_command": "python3 -m pytest applications/genotype_pair_ld/tests && bash docs/paper/experiments/e8_public_ld_window.sh && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/provenance.json >/dev/null && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/verification.json >/dev/null",
+      "reason": "Hosted verification certificate generation requires a published application bundle/result and server credentials. This E8 run is a local aggregate-only public-data experiment.",
+      "status": "not_published"
+    },
+    "hosted_computation_certificate": {
+      "certificate_url": null,
+      "reason": "This optional public-real-DNA experiment was run locally and has not been submitted to the hosted blindmachine.org computation service, so no /verify/:certificate_hash page exists yet.",
+      "status": "not_published"
+    },
+    "local_reproduction_command": "python3 -m pytest applications/genotype_pair_ld/tests && bash docs/paper/experiments/e8_public_ld_window.sh && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/provenance.json >/dev/null && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/verification.json >/dev/null",
+    "local_verification": {
+      "checks": {
+        "all_exact_moments_match": true,
+        "exact_moment_matches": {
+          "sum_a": true,
+          "sum_a2": true,
+          "sum_ab": true,
+          "sum_b": true,
+          "sum_b2": true
+        }
+      },
+      "command": "python3 -m pytest applications/genotype_pair_ld/tests && bash docs/paper/experiments/e8_public_ld_window.sh && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/provenance.json >/dev/null && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/verification.json >/dev/null",
+      "status": "passed"
+    },
+    "paper_evidence_json_url": "https://blindmachine.org/verify/paper/public-genomics-e8-ld-window.json",
+    "paper_evidence_url": "https://blindmachine.org/verify/paper/public-genomics-e8-ld-window"
+  },
+  "work_artifacts": {
+    "sample_panel_sha256": "sha256:b4023dc6ee2d62ee89c8d4d347db4d348e65518d66d346574cdae7a4bbd76858",
+    "selected_samples_sha256": "sha256:11d3a9c3828e37e31554104c20206e618edae9f3a182c9df925184d52fb8b80f",
+    "vcf_subset_sha256": "sha256:6b82841ecfa78e6d10a508073841249cb658a3e1ca7830501c76a076112af251"
+  }
+}

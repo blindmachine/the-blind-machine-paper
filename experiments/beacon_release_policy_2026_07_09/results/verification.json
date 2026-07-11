@@ -1,0 +1,10 @@
+{
+  "hosted_computation_certificate": {
+    "certificate_url": null,
+    "reason": "This optional public-real-DNA experiment was run locally and has not been submitted to the hosted blindmachine.org computation service, so no /verify/:certificate_hash page exists yet.",
+    "status": "not_published"
+  },
+  "local_reproduction_command": "bash docs/paper/experiments/e7_beacon_release_policy.sh",
+  "paper_evidence_json_url": "https://blindmachine.org/verify/paper/public-genomics-e7-beacon-policy.json",
+  "paper_evidence_url": "https://blindmachine.org/verify/paper/public-genomics-e7-beacon-policy"
+}

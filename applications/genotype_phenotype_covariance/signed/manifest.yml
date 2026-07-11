@@ -1,0 +1,95 @@
+# Blind Machine curated protocol bundle — genotype_phenotype_covariance.
+#
+# The v1 encrypted×encrypted anchor: a genuine ciphertext×ciphertext product
+# (depth 1) under multiplication-supporting BFV params. This manifest is the ONLY
+# file the Rails platform parses. The author's pure functions in server.py /
+# local_project_owner.py / local_data_owner.py own the computation; the numbered
+# stage files are kit-owned shims that call them (see docs/rfcs/0002). This file
+# owns the governance + review surface (display metadata + the gate values that
+# let compute be authorized without unpacking the tarball). See
+# docs/protocol_structure.md for the schema and docs/protocol_catalog.md §6.
+name: genotype_phenotype_covariance
+version: 1.0.0
+
+builder:
+  type: uv
+  project: env
+
+crypto: tenseal-bfv              # display hint; real deps live in env/uv.lock
+computation: multiplicative_bfv  # depth-1 ciphertext×ciphertext product (relin)
+min_contributors: 30
+
+# The published definition: the variant coordinate list PLUS the phenotype coding
+# scheme, both folded into the bundle SHA-256. Every contributor MUST encode
+# against the identical definition or the blind moments are meaningless — that
+# invariant is what folding this manifest into the digest enforces. For the
+# synthetic v1 demo the coordinate list is generated deterministically from `seed`
+# rather than enumerated inline (see docs/protocol_structure.md).
+input:
+  genotype:
+    type: integer_vector
+    length: 1000
+    value_domain: [0, 1, 2]      # alt-allele dosage per coordinate; missing -> 0
+    coordinates:
+      kind: synthetic_variants
+      seed: blind-v1-demo-coordinates
+      fields: [chrom, pos, ref, alt]
+  phenotype:
+    type: integer_scalar
+    coding: case_control         # binary; broadcast to all L slots at encode time
+    value_domain: [0, 1]         # a quantized trait uses [0, Q] + a larger t
+  # Each contributor uploads ONE packed blob co-packing that owner's (cipher_g,
+  # cipher_y) pair into a single deterministic BMCT1 container (magic b"BMCT1\n",
+  # names {g, y}); stage 30 unpacks it and forms enc(g) * enc(y) itself (catalog
+  # §6). One blob per contributor is the platform's canonical contribution shape:
+  # it keeps the (g, y) pair inseparable through the hosted worker's digest-sorting
+  # Stager, which would otherwise reorder two separate ciphertexts and silently
+  # mis-pair them. See SECURITY.md § "Pairing integrity".
+  submitted_as: one_packed_pair_ciphertext
+
+output:
+  shape: covariance_moment_vectors  # sum_g, sum_gy, sum_y, sum_y2 (+ N sentinel)
+  exactness: exact                  # BFV is exact in Z_t; moment sums never overflow t
+  tolerance: 0
+  # Stage 30 writes ONE opaque result.bin FILE (the worker content-addresses a
+  # single artifact). All four moment ciphertexts are packed into a deterministic
+  # BMCT1 container (magic b"BMCT1\n"; shared verbatim with
+  # allele_frequency_with_variance). max_ciphertext_mb below bounds the WHOLE
+  # packed container.
+
+release_policy:
+  aggregate_only: true           # only the summed moment set is ever decrypted
+  allowed_runs_per_project: 1    # run cap (differencing mitigation, not a defense)
+
+# Larger ring (poly 16384) + one packed (g, y) blob per contributor (two
+# ciphertexts) + four output ciphertexts => the additive flagship's 8192/3600/512
+# budget is bumped.
+resources:
+  max_memory_mb: 16384
+  max_wall_seconds: 7200
+  max_ciphertext_mb: 2048
+
+# Collaboration scenario (docs/rfcs/0002 §4.1): who runs which role's functions.
+# The author writes pure functions grouped BY ROLE into the files below; the
+# numbered stage shims that call them are kit-owned framework code, materialized
+# at run time (never signed into the bundle). `aggregate` = 1 project owner + N
+# data owners.
+scenario:
+  name: aggregate
+  roles:
+    project_owner: { file: local_project_owner.py, functions: [ keygen, decrypt, decode ] }
+    data_owner:    { file: local_data_owner.py,    functions: [ encode, encrypt ] }
+    server:        { file: server.py,              functions: [ compute ] }
+
+# Content-addressing digests. Computed at registry ingest — `bundle` by
+# protocols/hash_bundle.py, `env_lock` over env/uv.lock + env/.python-version +
+# pinned runner metadata. Left null in the committed bundle ON PURPOSE: the
+# canonical bundle digest is computed over the raw bytes of every signed file
+# INCLUDING this manifest, so a computed `bundle` value here would be
+# self-referential (its own input). The authoritative digest instead NAMES the
+# bundle (protocol-<name>@<digest>) and is recorded out-of-band
+# (.blind-signature / DB), never inside the file it would have to hash. See
+# protocols/README.md § "Why the manifest ships null hash placeholders".
+hashes:
+  bundle: null
+  env_lock: null

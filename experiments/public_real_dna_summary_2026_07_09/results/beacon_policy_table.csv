@@ -1,0 +1,7 @@
+policy,positions_compared,exact_position_recovery_rate,nonzero_recovery_rate
+no_policy_exact_adjacent_counts,40,1.0,1.0
+min_n_20_only,40,1.0,1.0
+min_n_25_blocks_adjacent_base,0,0.0,0.0
+cohort_freeze_single_release,0,0.0,0.0
+query_budget_5,5,0.125,0.16666666666666666
+rounded_counts_to_nearest_5,40,0.85,0.0

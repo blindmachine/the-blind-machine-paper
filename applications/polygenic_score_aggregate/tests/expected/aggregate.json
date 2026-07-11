@@ -1,0 +1,27 @@
+{
+  "protocol": "polygenic_score_aggregate",
+  "coordinates_length": 16,
+  "weight_scale": 1000,
+  "n_contributors": 4,
+  "weighted_counts": [
+    1956,
+    1760,
+    3656,
+    2961,
+    7808,
+    7140,
+    4038,
+    1016,
+    5652,
+    2326,
+    4173,
+    105,
+    3795,
+    4896,
+    5052,
+    536
+  ],
+  "cohort_pgs_scaled": 56870,
+  "cohort_pgs_sum": 56.87,
+  "mean_pgs": 14.2175
+}

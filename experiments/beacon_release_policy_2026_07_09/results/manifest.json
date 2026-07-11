@@ -1,0 +1,11 @@
+{
+  "result_files": {
+    "aggregate_risk.json": "sha256:d059095d46dd3f57c1f4fdf1b0ca76dc4f1d8359efafb5399c1f460c0182a4cd",
+    "blindmachine_results.json": "sha256:c99f3301525d3e0ffc5b923aaa61dbf87e648bb77aec4d921b1bc68589386892",
+    "policy_risk_summary.csv": "sha256:f49d2e21373d49190f0994d10057f29d95fd0b5f5a64de4a90b97325cf548a76",
+    "provenance.json": "sha256:fe7b2bc4b2c90d598340e54c3691274e4c9951bbebb274a0a8439eedb625b40d",
+    "query_budget_curve.csv": "sha256:5b027941b0f9e8eb2138392c0aa2804286daf697a50da933561db2e114860092",
+    "report.md": "sha256:a77cdfd00586f60117b3e997db25a8901eea5553f9f74a7ba15793af18ebcb6f",
+    "verification.json": "sha256:a46381a0c3011ed3c42fb52b957951dbcbe1f5a419bcdbab5c64f41998f6757c"
+  }
+}

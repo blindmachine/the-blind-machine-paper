@@ -1,0 +1,104 @@
+{
+  "allele_frequency_count": {
+    "128": {
+      "ct_bytes_per_contribution": 262282,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "192": {
+      "ct_bytes_per_contribution": 235732,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "256": {
+      "ct_bytes_per_contribution": 220310,
+      "exact": true,
+      "max_error": 0.0
+    }
+  },
+  "allele_frequency_with_variance": {
+    "128": {
+      "ct_bytes_per_contribution": 1310882,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "192": {
+      "ct_bytes_per_contribution": 786582,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "256": {
+      "ct_bytes_per_contribution": 657708,
+      "exact": true,
+      "max_error": 0.0
+    }
+  },
+  "carrier_count": {
+    "128": {
+      "ct_bytes_per_contribution": 262282,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "192": {
+      "ct_bytes_per_contribution": 235723,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "256": {
+      "ct_bytes_per_contribution": 220311,
+      "exact": true,
+      "max_error": 0.0
+    }
+  },
+  "cohort_histogram": {
+    "128": {
+      "ct_bytes_per_contribution": 262282,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "192": {
+      "ct_bytes_per_contribution": 235722,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "256": {
+      "ct_bytes_per_contribution": 220292,
+      "exact": true,
+      "max_error": 0.0
+    }
+  },
+  "genotype_phenotype_covariance": {
+    "128": {
+      "ct_bytes_per_contribution": 2621791,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "192": {
+      "ct_bytes_per_contribution": 1573191,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "256": {
+      "ct_bytes_per_contribution": 1315673,
+      "exact": true,
+      "max_error": 0.0
+    }
+  },
+  "polygenic_score_aggregate": {
+    "128": {
+      "ct_bytes_per_contribution": 262282,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "192": {
+      "ct_bytes_per_contribution": 235720,
+      "exact": true,
+      "max_error": 0.0
+    },
+    "256": {
+      "ct_bytes_per_contribution": 220297,
+      "exact": true,
+      "max_error": 0.0
+    }
+  }
+}

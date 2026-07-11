@@ -1,0 +1,88 @@
+# Blind Machine curated protocol bundle — MULTIPLICATION-SUPPORTING (depth 1).
+#
+# This manifest is the ONLY file the Rails platform parses. The author's pure
+# functions in server.py / local_project_owner.py / local_data_owner.py own the
+# computation; the numbered stage files are kit-owned shims that call them (see
+# docs/rfcs/0002). This file owns the governance + review surface (display
+# metadata + the gate values that let compute be authorized without unpacking the
+# tarball). See docs/protocol_structure.md for the schema and
+# docs/protocol_catalog.md §5 for this protocol's definition.
+#
+# This is the "money comparison" row of the paper: the SAME published coordinate
+# definition and the SAME contributor payload as the flagship (protocol 1), but
+# the server SQUARES an encrypted value (ct x ct, depth 1) to derive the second
+# moment. It isolates the cost of exactly one multiplicative level. The additive
+# client-precompute benchmark VARIANT (client pre-squares, server only sums) is
+# documented in BENCHMARK.md and is NOT a separate registry protocol.
+name: allele_frequency_with_variance
+version: 1.0.0
+
+builder:
+  type: uv
+  project: env
+
+crypto: tenseal-bfv               # display hint; real deps live in env/uv.lock
+computation: multiplicative_bfv   # server squares under encryption (ct x ct, depth 1)
+min_contributors: 30
+
+# The published coordinate definition — IDENTICAL to the flagship (protocol 1),
+# which is exactly what makes protocol 5 the controlled multiplicative-depth
+# comparison. Every contributor MUST encode against the identical definition or
+# the blind aggregate is meaningless; that invariant is enforced by folding this
+# manifest into the bundle SHA-256. For the synthetic v1 demo the coordinate list
+# is generated deterministically from `seed` (see docs/protocol_structure.md).
+input:
+  type: integer_vector
+  length: 1000
+  value_domain: [0, 1, 2]         # alt-allele dosage per coordinate; missing -> 0
+  coordinates:
+    kind: synthetic_variants
+    seed: blind-v1-demo-coordinates
+    fields: [chrom, pos, ref, alt]
+
+output:
+  shape: sum_and_sumsq_vectors    # sum_g in Z^L and sum_g2 in Z^L (+ append-1 sentinel -> N)
+  exactness: exact                # BFV is exact in Z_t; g^2 <= 4 so max sum_g2 = 4N < t
+  tolerance: 0
+  # Stage 30 writes ONE opaque result.bin FILE (the worker content-addresses a
+  # single artifact). Both moment ciphertexts (sum_g, sum_g2) are packed into a
+  # deterministic BMCT1 container (magic b"BMCT1\n"; shared verbatim with
+  # genotype_phenotype_covariance). max_ciphertext_mb below bounds the WHOLE
+  # packed container.
+
+release_policy:
+  aggregate_only: true            # only the two summed moment vectors are ever decrypted
+  allowed_runs_per_project: 1     # run cap (differencing mitigation, not a defense)
+
+# Bumped for the larger multiplication-supporting ring: poly_modulus_degree 16384
+# ciphertexts are ~2-4x the 8192 ones, and the square path holds a second
+# accumulator, so both memory and ciphertext size grow vs the flagship.
+resources:
+  max_memory_mb: 16384
+  max_wall_seconds: 7200
+  max_ciphertext_mb: 2048
+
+# Collaboration scenario (docs/rfcs/0002 §4.1): who runs which role's functions.
+# The author writes pure functions grouped BY ROLE into the files below; the
+# numbered stage shims that call them are kit-owned framework code, materialized
+# at run time (never signed into the bundle). `aggregate` = 1 project owner + N
+# data owners.
+scenario:
+  name: aggregate
+  roles:
+    project_owner: { file: local_project_owner.py, functions: [ keygen, decrypt, decode ] }
+    data_owner:    { file: local_data_owner.py,    functions: [ encode, encrypt ] }
+    server:        { file: server.py,              functions: [ compute ] }
+
+# Content-addressing digests. Computed at registry ingest — `bundle` by
+# protocols/hash_bundle.py, `env_lock` over env/uv.lock + env/.python-version +
+# pinned runner metadata. Left null in the committed bundle ON PURPOSE: the
+# canonical bundle digest is computed over the raw bytes of every signed file
+# INCLUDING this manifest, so a computed `bundle` value here would be
+# self-referential (its own input). The authoritative digest instead NAMES the
+# bundle (protocol-<name>@<digest>) and is recorded out-of-band
+# (.blind-signature / DB), never inside the file it would have to hash. See
+# protocols/README.md § "Why the manifest ships null hash placeholders".
+hashes:
+  bundle: null
+  env_lock: null

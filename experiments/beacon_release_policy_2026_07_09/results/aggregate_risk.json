@@ -1,0 +1,70 @@
+{
+  "base_n": 24,
+  "included_n": 25,
+  "interpretation": "Exact adjacent releases recover the held-out public sample's dosage vector by subtraction; release governance blocks or limits the comparison surface.",
+  "policies": {
+    "cohort_freeze_single_release": {
+      "exact_dosage_positions_recovered": 0,
+      "exact_position_recovery_rate": 0.0,
+      "nonzero_recovery_rate": 0.0,
+      "positions_compared": 0
+    },
+    "min_n_20_only": {
+      "exact_dosage_positions_recovered": 40,
+      "exact_position_recovery_rate": 1.0,
+      "nonzero_recovery_rate": 1.0,
+      "positions_compared": 40
+    },
+    "min_n_25_blocks_adjacent_base": {
+      "exact_dosage_positions_recovered": 0,
+      "exact_position_recovery_rate": 0.0,
+      "nonzero_recovery_rate": 0.0,
+      "positions_compared": 0
+    },
+    "no_policy_exact_adjacent_counts": {
+      "exact_dosage_positions_recovered": 40,
+      "exact_position_recovery_rate": 1.0,
+      "nonzero_recovery_rate": 1.0,
+      "positions_compared": 40
+    },
+    "query_budget_1": {
+      "exact_dosage_positions_recovered": 1,
+      "exact_position_recovery_rate": 0.025,
+      "nonzero_recovery_rate": 0.0,
+      "positions_compared": 1
+    },
+    "query_budget_10": {
+      "exact_dosage_positions_recovered": 10,
+      "exact_position_recovery_rate": 0.25,
+      "nonzero_recovery_rate": 0.3333333333333333,
+      "positions_compared": 10
+    },
+    "query_budget_2": {
+      "exact_dosage_positions_recovered": 2,
+      "exact_position_recovery_rate": 0.05,
+      "nonzero_recovery_rate": 0.16666666666666666,
+      "positions_compared": 2
+    },
+    "query_budget_20": {
+      "exact_dosage_positions_recovered": 20,
+      "exact_position_recovery_rate": 0.5,
+      "nonzero_recovery_rate": 0.6666666666666666,
+      "positions_compared": 20
+    },
+    "query_budget_5": {
+      "exact_dosage_positions_recovered": 5,
+      "exact_position_recovery_rate": 0.125,
+      "nonzero_recovery_rate": 0.16666666666666666,
+      "positions_compared": 5
+    },
+    "rounded_counts_to_nearest_5": {
+      "exact_dosage_positions_recovered": 34,
+      "exact_position_recovery_rate": 0.85,
+      "nonzero_recovery_rate": 0.0,
+      "positions_compared": 40
+    }
+  },
+  "study": "beacon_release_policy_2026_07_09",
+  "target_nonzero_positions": 6,
+  "variant_count": 40
+}

@@ -1,0 +1,97 @@
+# Blind Machine curated protocol bundle — polygenic_score_aggregate.
+#
+# This manifest is the ONLY file the Rails platform parses. The author's pure
+# functions in server.py / local_project_owner.py / local_data_owner.py own the
+# computation; the numbered stage files are kit-owned shims that call them (see
+# docs/rfcs/0002). This file owns the governance + review surface (display
+# metadata + coordinate/weight definition + the gate values that let compute be
+# authorized without unpacking the tarball). See docs/protocol_structure.md for
+# the schema and docs/protocol_catalog.md §4 for this protocol's definition.
+#
+# The "looks multiplicative, remains additive" protocol: the statistic is a
+# weighted sum sum_j w_j * g_j, but every weight is PUBLIC, so the server applies
+# them as a plaintext-scalar multiply (ciphertext x plaintext), never a
+# ciphertext x ciphertext multiply. It therefore stays on minimal, additive-tier
+# BFV params with no relinearization or Galois keys.
+name: polygenic_score_aggregate
+version: 1.0.0
+
+builder:
+  type: uv
+  project: env
+
+crypto: tenseal-bfv             # display hint; real deps live in env/uv.lock
+computation: additive_bfv       # additive fold + public plaintext-scalar multiply
+min_contributors: 20
+
+# The published coordinate definition. Every contributor MUST encode against the
+# identical definition (dosage g in {0,1,2}^L) or the blind weighted sum is
+# meaningless — that invariant is what folding this manifest into the bundle
+# SHA-256 enforces. For the synthetic v1 demo the coordinate list is generated
+# deterministically from `seed` rather than enumerated inline (see
+# docs/protocol_structure.md: "The manifest may use generated coordinates for
+# synthetic v1 protocols.").
+input:
+  type: integer_vector
+  length: 1000
+  value_domain: [0, 1, 2]       # alt-allele dosage per coordinate; missing -> 0
+  coordinates:
+    kind: synthetic_variants
+    seed: blind-v1-demo-coordinates
+    fields: [chrom, pos, ref, alt]
+
+# The published PUBLIC effect weights — part of the protocol identity, folded into
+# the digest. Integer-scaled by the fixed-point factor `scale` (S): the server
+# multiplies the summed cohort ciphertext by these integer weights (with weight 1
+# on the append-1 sentinel slot). Generated deterministically from `seed` by
+# 30_compute_encrypted.py's `scaled_weights(length)`; a reviewer regenerates the
+# exact vector from (seed, scale, length). Real-domain effect weight[j] =
+# w_scaled[j] / S, in (0, 2.0] for this demo.
+weights:
+  scale: 1000                   # fixed-point factor S; real rounding error <= 1/S
+  values:
+    kind: synthetic_weights
+    seed: blind-v1-pgs-weights
+    range: [1, 2000]            # integer-scaled weight bounds (real (0, 2.0])
+
+output:
+  shape: weighted_aggregate_vector  # w_scaled[j] * sum_i g_ij (+ sentinel -> N)
+  exactness: exact                  # exact in the integer-scaled domain (BFV, Z_t)
+  tolerance: 0                      # integer aggregate is bit-exact; real <= 1/S
+
+release_policy:
+  aggregate_only: true          # only the summed, weighted vector is ever decrypted
+  allowed_runs_per_project: 1   # run cap (differencing mitigation, not a defense)
+
+# Params unchanged from the flagship (poly 8192), so the flagship compute budget
+# holds; only the plaintext modulus grows (30-bit, for the weight-inflated value
+# envelope). See 00_keygen.py.
+resources:
+  max_memory_mb: 8192
+  max_wall_seconds: 3600
+  max_ciphertext_mb: 512
+
+# Collaboration scenario (docs/rfcs/0002 §4.1): who runs which role's functions.
+# The author writes pure functions grouped BY ROLE into the files below; the
+# numbered stage shims that call them are kit-owned framework code, materialized
+# at run time (never signed into the bundle). `aggregate` = 1 project owner + N
+# data owners.
+scenario:
+  name: aggregate
+  roles:
+    project_owner: { file: local_project_owner.py, functions: [ keygen, decrypt, decode ] }
+    data_owner:    { file: local_data_owner.py,    functions: [ encode, encrypt ] }
+    server:        { file: server.py,              functions: [ compute ] }
+
+# Content-addressing digests. Computed at registry ingest — `bundle` by
+# protocols/hash_bundle.py, `env_lock` over env/uv.lock + env/.python-version +
+# pinned runner metadata. Left null in the committed bundle ON PURPOSE: the
+# canonical bundle digest is computed over the raw bytes of every signed file
+# INCLUDING this manifest, so a computed `bundle` value here would be
+# self-referential (its own input). The authoritative digest instead NAMES the
+# bundle (protocol-<name>@<digest>) and is recorded out-of-band
+# (.blind-signature / DB), never inside the file it would have to hash. See
+# protocols/README.md § "Why the manifest ships null hash placeholders".
+hashes:
+  bundle: null
+  env_lock: null

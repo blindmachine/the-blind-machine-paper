@@ -1,0 +1,17 @@
+{
+  "protocol": "cohort_histogram",
+  "buckets_length": 10,
+  "n_contributors": 5,
+  "counts": [
+    1,
+    0,
+    2,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    1
+  ]
+}

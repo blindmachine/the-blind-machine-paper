@@ -1,0 +1,29 @@
+{
+  "blindmachine_org": {
+    "local_verification_command": "python3 -m pytest applications/genotype_pair_ld/tests && bash docs/paper/experiments/e8_public_ld_window.sh && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/provenance.json >/dev/null && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/verification.json >/dev/null",
+    "reason": "Hosted verification certificate generation requires a published application bundle/result and server credentials. This E8 run is a local aggregate-only public-data experiment.",
+    "status": "not_published"
+  },
+  "hosted_computation_certificate": {
+    "certificate_url": null,
+    "reason": "This optional public-real-DNA experiment was run locally and has not been submitted to the hosted blindmachine.org computation service, so no /verify/:certificate_hash page exists yet.",
+    "status": "not_published"
+  },
+  "local_reproduction_command": "python3 -m pytest applications/genotype_pair_ld/tests && bash docs/paper/experiments/e8_public_ld_window.sh && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/provenance.json >/dev/null && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/verification.json >/dev/null",
+  "local_verification": {
+    "checks": {
+      "all_exact_moments_match": true,
+      "exact_moment_matches": {
+        "sum_a": true,
+        "sum_a2": true,
+        "sum_ab": true,
+        "sum_b": true,
+        "sum_b2": true
+      }
+    },
+    "command": "python3 -m pytest applications/genotype_pair_ld/tests && bash docs/paper/experiments/e8_public_ld_window.sh && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/provenance.json >/dev/null && python3 -m json.tool docs/paper/experiments/public_ld_window_2026_07_09/results/verification.json >/dev/null",
+    "status": "passed"
+  },
+  "paper_evidence_json_url": "https://blindmachine.org/verify/paper/public-genomics-e8-ld-window.json",
+  "paper_evidence_url": "https://blindmachine.org/verify/paper/public-genomics-e8-ld-window"
+}

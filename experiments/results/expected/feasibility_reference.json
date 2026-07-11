@@ -1,0 +1,18 @@
+{
+  "n100_L10": {
+    "ct_bytes_per_contribution": 262282,
+    "exact": true
+  },
+  "n100_L100": {
+    "ct_bytes_per_contribution": 262282,
+    "exact": true
+  },
+  "n20_L10": {
+    "ct_bytes_per_contribution": 262282,
+    "exact": true
+  },
+  "n20_L100": {
+    "ct_bytes_per_contribution": 262282,
+    "exact": true
+  }
+}

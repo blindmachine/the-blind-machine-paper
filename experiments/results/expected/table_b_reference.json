@@ -1,0 +1,44 @@
+{
+  "allele_frequency_count": {
+    "crypto": "bfv-add",
+    "ct_bytes_per_contribution": 262282,
+    "exact": "True",
+    "max_error": "0.0",
+    "tier": "additive-BFV-exact"
+  },
+  "allele_frequency_with_variance": {
+    "crypto": "bfv-mul",
+    "ct_bytes_per_contribution": 1310882,
+    "exact": "True",
+    "max_error": "0.0",
+    "tier": "mult-supporting-BFV-exact"
+  },
+  "carrier_count": {
+    "crypto": "bfv-add",
+    "ct_bytes_per_contribution": 262282,
+    "exact": "True",
+    "max_error": "0.0",
+    "tier": "additive-BFV-exact"
+  },
+  "cohort_histogram": {
+    "crypto": "bfv-add",
+    "ct_bytes_per_contribution": 262282,
+    "exact": "True",
+    "max_error": "0.0",
+    "tier": "additive-BFV-exact"
+  },
+  "genotype_phenotype_covariance": {
+    "crypto": "bfv-mul",
+    "ct_bytes_per_contribution": 2621791,
+    "exact": "True",
+    "max_error": "0.0",
+    "tier": "mult-supporting-BFV-exact"
+  },
+  "polygenic_score_aggregate": {
+    "crypto": "bfv-add",
+    "ct_bytes_per_contribution": 262282,
+    "exact": "True",
+    "max_error": "0.0",
+    "tier": "additive-BFV-exact"
+  }
+}
