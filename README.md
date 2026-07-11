@@ -2,7 +2,7 @@
 
 Everything needed to independently reproduce the empirical claims in
 *The Blind Machine* paper. This repository is the **canonical, tagged, and
-Zenodo-archived** replication package: `git clone`, `git checkout` the paper's
+checksum-verified** replication package: `git clone`, `git checkout` the paper's
 tag, and run one command.
 
 The design thesis of the paper is *verify, don't trust us* — so these materials
@@ -14,7 +14,7 @@ fetch authentic bytes straight from the authoritative public source.
 - **This repo** (replication): https://github.com/blindmachine/the-blind-machine-paper
 - **Paper text**: https://blindmachine.org/papers/the-blind-machine
 
-Snapshot assembled: 2026-07-11T06:44:49Z
+Snapshot assembled: 2026-07-11T07:18:17Z
 
 ---
 
