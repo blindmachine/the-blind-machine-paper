@@ -11,8 +11,13 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 echo "[setup] materializing sealed per-application environments (uv sync --frozen)…"
-for p in "${APPLICATIONS[@]}"; do
-  if [ -d "$APPS_DIR/$p/signed/env/.venv" ]; then
+# Seal the six signed bundles AND the E8 draft bundle; the sealed envs also provide
+# the TenSEAL runtime the E5-E8 real-DNA studies re-exec into. A bundle that isn't
+# present (e.g. a package that omitted the draft) is skipped, and its study SKIPs.
+for p in "${ALL_APPLICATIONS[@]}"; do
+  if [ ! -d "$APPS_DIR/$p/signed" ]; then
+    echo "  · $p  not present — skipping"
+  elif [ -d "$APPS_DIR/$p/signed/env/.venv" ]; then
     echo "  · $p  env already sealed"
   else
     echo "  · $p  sealing env…"

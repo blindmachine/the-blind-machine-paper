@@ -15,11 +15,15 @@ sys.path.insert(0, str(EXPERIMENTS_DIR))
 from public_genomics_common import (  # noqa: E402
     ACCESS_DATE,
     CHR22_VCF_URL,
+    DataUnavailable,
     GENOME_BUILD,
     PANEL_URL,
     dosage_vectors,
+    ensure_bcftools,
+    ensure_tenseal_runtime,
     fetch_vcf_text,
     mean,
+    require_bundle,
     parse_vcf,
     read_panel,
     repo_root_from_experiment,
@@ -150,6 +154,9 @@ def write_report(summary: dict[str, Any], rows: list[dict[str, Any]]) -> None:
 
 
 def main() -> int:
+    ensure_tenseal_runtime(REPO_ROOT, SCRIPT_PATH)
+    ensure_bcftools()
+    require_bundle(REPO_ROOT, "genotype_pair_ld")
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     WORK_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -288,4 +295,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except DataUnavailable as exc:
+        print(f"SKIP: {exc}", flush=True)
+        raise SystemExit(3)

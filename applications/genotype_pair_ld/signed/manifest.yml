@@ -1,0 +1,54 @@
+name: genotype_pair_ld
+version: 1.0.0
+summary: Adjacent or bounded-pair genotype LD moments over encrypted dosage vectors.
+
+builder:
+  type: uv
+  project: env
+
+crypto: tenseal-bfv
+computation: multiplicative_bfv
+min_contributors: 30
+
+input:
+  genotype:
+    type: integer_vector
+    length: 1001
+    value_domain: [0, 1, 2]
+    coordinates:
+      kind: synthetic_variants
+      seed: blind-v1-demo-ld-coordinates
+      fields: [chrom, pos, ref, alt]
+  pairs:
+    type: index_pair_list
+    pair_count: 1000
+    strategy: adjacent_pairs_or_bounded_list
+    fields: [left_variant_index, right_variant_index]
+  submitted_as: one_packed_pair_ciphertext
+
+output:
+  shape: genotype_pair_ld_moment_vectors
+  exactness: exact
+  tolerance: 0
+  moments: [sum_a, sum_b, sum_a2, sum_b2, sum_ab]
+  derived_statistics: [covariance, r, r2]
+
+release_policy:
+  aggregate_only: true
+  allowed_runs_per_project: 1
+
+resources:
+  max_memory_mb: 16384
+  max_wall_seconds: 7200
+  max_ciphertext_mb: 2048
+
+scenario:
+  name: aggregate
+  roles:
+    project_owner: { file: local_project_owner.py, functions: [ keygen, decrypt, decode ] }
+    data_owner:    { file: local_data_owner.py,    functions: [ encode, encrypt ] }
+    server:        { file: server.py,              functions: [ compute ] }
+
+hashes:
+  bundle: null
+  env_lock: null

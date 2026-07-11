@@ -15,9 +15,12 @@ sys.path.insert(0, str(EXPERIMENTS_DIR))
 from public_genomics_common import (  # noqa: E402
     ACCESS_DATE,
     CHR22_VCF_URL,
+    DataUnavailable,
     GENOME_BUILD,
     PANEL_URL,
     cleartext_sums,
+    ensure_bcftools,
+    ensure_tenseal_runtime,
     dosage_vectors,
     fetch_vcf_text,
     parse_vcf,
@@ -234,6 +237,8 @@ def write_report(summary: dict[str, Any], policies: list[dict[str, Any]]) -> Non
 
 
 def main() -> int:
+    ensure_tenseal_runtime(REPO_ROOT, SCRIPT_PATH)
+    ensure_bcftools()
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     WORK_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -363,4 +368,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except DataUnavailable as exc:
+        print(f"SKIP: {exc}", flush=True)
+        raise SystemExit(3)

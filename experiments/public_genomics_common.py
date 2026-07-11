@@ -12,6 +12,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -58,21 +59,117 @@ class Variant:
         return parse_float(self.info.get("AF"))
 
 
+# Exit code the E5-E8 studies use for a clean SKIP (a genuinely-missing
+# prerequisite), so replicate_all.sh can tell PASS (0) from SKIP (3) from FAIL.
+SKIP_EXIT = 3
+
+
+class DataUnavailable(RuntimeError):
+    """A required external tool or data source could not be reached (bcftools/tabix
+    missing, or the public genome fetch failed). This is a SKIP condition — a
+    missing prerequisite — not a wrong scientific result (which stays a FAIL)."""
+
+
+# The six signed paper bundles plus the E8 draft bundle. Any ONE sealed env among
+# these provides the TenSEAL runtime the studies need (they import a bundle's
+# server.py, which `import tenseal`). Kept in sync with lib.sh's ALL_APPLICATIONS.
+_SEALED_ENV_APPS = (
+    "allele_frequency_count",
+    "carrier_count",
+    "cohort_histogram",
+    "polygenic_score_aggregate",
+    "allele_frequency_with_variance",
+    "genotype_phenotype_covariance",
+    "genotype_pair_ld",
+)
+
+
+def find_repo_root(start: Path) -> Path:
+    """The directory that holds `applications/`, found by walking up from `start`.
+
+    Works in BOTH layouts: the monorepo (`docs/paper/experiments/<study>`, so the
+    repo root is several levels up) and the published paper package
+    (`experiments/<study>`, where `applications/` is a sibling of `experiments/`).
+    The old `parents[3]` assumption pointed ABOVE a standalone package, which is why
+    an external clone could not find the bundles. `BLIND_PAPER_ROOT` overrides."""
+    override = os.environ.get("BLIND_PAPER_ROOT")
+    if override:
+        return Path(override).resolve()
+    start = start.resolve()
+    for candidate in (start, *start.parents):
+        if (candidate / "applications").is_dir():
+            return candidate
+    return start.parents[3]  # historic monorepo fallback
+
+
 def repo_root_from_experiment(study_dir: Path) -> Path:
-    return study_dir.resolve().parents[3]
+    return find_repo_root(study_dir)
+
+
+def _skip(message: str):
+    print(f"SKIP: {message}", flush=True)
+    raise SystemExit(SKIP_EXIT)
+
+
+def ensure_tenseal_runtime(repo_root: Path, script_path: Path) -> None:
+    """Guarantee the study runs under a TenSEAL-capable interpreter.
+
+    The real-DNA studies import each bundle's `server.py`, which `import tenseal`.
+    Launched under a bare `python3` without TenSEAL, this re-execs the script under
+    a sealed application env (`applications/<app>/signed/env/.venv/bin/python`,
+    materialized by `setup.sh`). If none is sealed, SKIP cleanly rather than crash
+    with a ModuleNotFoundError — a missing runtime is not a replication failure.
+    `BLIND_STUDY_REEXEC` guards against an infinite re-exec loop."""
+    try:
+        import tenseal  # noqa: F401
+        return
+    except Exception:
+        pass
+    if os.environ.get("BLIND_STUDY_REEXEC") == "1":
+        _skip("TenSEAL is not importable even under the sealed application env; "
+              "re-run `bash experiments/setup.sh` to (re)seal it.")
+    for app in _SEALED_ENV_APPS:
+        py = repo_root / "applications" / app / "signed" / "env" / ".venv" / "bin" / "python"
+        if py.is_file():
+            env = {**os.environ, "BLIND_STUDY_REEXEC": "1"}
+            os.execve(str(py), [str(py), str(script_path), *sys.argv[1:]], env)
+    _skip("no sealed application environment found — run `bash experiments/setup.sh` "
+          "first (it seals TenSEAL over Microsoft SEAL once), then re-run this study.")
+
+
+def ensure_bcftools() -> None:
+    """SKIP (not FAIL) when the E5-E8 toolchain is absent: bcftools + tabix read the
+    public 1000 Genomes VCF slices, so without them the real-DNA studies cannot fetch
+    data at all. A tool you could not install is not a failed replication."""
+    missing = [tool for tool in ("bcftools", "tabix") if shutil.which(tool) is None]
+    if missing:
+        _skip(f"missing tool(s): {', '.join(missing)} — E5-E8 need bcftools+tabix to "
+              "read the public 1000 Genomes slices. Install them, then re-run.")
+
+
+def require_bundle(repo_root: Path, app_name: str) -> None:
+    """SKIP if a bundle a study needs was not shipped — e.g. the draft
+    `genotype_pair_ld` for E8 in a package that excluded it."""
+    server = repo_root / "applications" / app_name / "signed" / "server.py"
+    if not server.is_file():
+        _skip(f"application bundle `{app_name}` is not present at {server.parent}; "
+              "this study cannot run without it.")
 
 
 def run(cmd: list[str], *, input_text: str | None = None, cwd: Path | None = None) -> str:
-    proc = subprocess.run(
-        cmd,
-        input=input_text,
-        capture_output=True,
-        text=True,
-        cwd=str(cwd) if cwd else None,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=input_text,
+            capture_output=True,
+            text=True,
+            cwd=str(cwd) if cwd else None,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise DataUnavailable(f"required tool not found on PATH: {cmd[0]}") from exc
     if proc.returncode != 0:
-        raise RuntimeError(
+        raise DataUnavailable(
             f"command failed ({proc.returncode}): {' '.join(cmd)}\n{proc.stderr[-2000:]}"
         )
     return proc.stdout

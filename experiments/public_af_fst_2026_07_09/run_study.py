@@ -52,7 +52,16 @@ IGSR_FTP_RELEASE_URL = BASE_URL + "/"
 
 SCRIPT_PATH = Path(__file__).resolve()
 STUDY_DIR = SCRIPT_PATH.parent
-REPO_ROOT = STUDY_DIR.parents[3]
+EXPERIMENTS_DIR = STUDY_DIR.parent
+sys.path.insert(0, str(EXPERIMENTS_DIR))
+from public_genomics_common import (  # noqa: E402
+    DataUnavailable,
+    ensure_bcftools,
+    ensure_tenseal_runtime,
+    find_repo_root,
+)
+
+REPO_ROOT = find_repo_root(STUDY_DIR)
 RESULTS_DIR = STUDY_DIR / "results"
 WORK_DIR = STUDY_DIR / "work"
 
@@ -107,16 +116,19 @@ class PlainVarianceEvaluator(PlainAddEvaluator):
 
 
 def run(cmd: list[str], *, input_text: str | None = None, cwd: Path | None = None) -> str:
-    proc = subprocess.run(
-        cmd,
-        input=input_text,
-        capture_output=True,
-        text=True,
-        cwd=str(cwd) if cwd else None,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=input_text,
+            capture_output=True,
+            text=True,
+            cwd=str(cwd) if cwd else None,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise DataUnavailable(f"required tool not found on PATH: {cmd[0]}") from exc
     if proc.returncode != 0:
-        raise RuntimeError(
+        raise DataUnavailable(
             f"command failed ({proc.returncode}): {' '.join(cmd)}\n{proc.stderr[-1600:]}"
         )
     return proc.stdout
@@ -904,6 +916,8 @@ def tool_versions() -> dict[str, str | None]:
 
 
 def main() -> int:
+    ensure_tenseal_runtime(REPO_ROOT, SCRIPT_PATH)
+    ensure_bcftools()
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     WORK_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1199,4 +1213,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except DataUnavailable as exc:
+        print(f"SKIP: {exc}", flush=True)
+        raise SystemExit(3)

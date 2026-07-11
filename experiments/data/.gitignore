@@ -1,0 +1,7 @@
+# Public genome data staged by fetch_public_data.sh. These bytes are DERIVED
+# from real human genomes (1000 Genomes / IGSR) and are NEVER committed — the
+# paper's human-data policy is: ship scripts + source pointers + aggregates, not
+# genotypes. Reviewers regenerate this cache from the authoritative source with
+#   bash docs/paper/experiments/fetch_public_data.sh
+*
+!.gitignore

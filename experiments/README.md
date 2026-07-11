@@ -1,6 +1,21 @@
 # Reproducible experiments — The Blind Machine bioRxiv paper
 
-**One command, no server, no real data, ~90 seconds:**
+**Everything (E1-E8) in one command, with a single PASS / SKIP / FAIL table:**
+
+```bash
+bash replicate_all.sh          # E1-E4 synthetic (offline, deterministic) + E5-E8 real-DNA
+bash replicate_all.sh fast     # skip the longer E2/E3 sweeps
+```
+
+`replicate_all.sh` runs the synthetic harness, fetches the bounded public genome
+slices, runs the four real-DNA studies, and prints one summary table. It exits
+non-zero **only** if a deterministic experiment produced a wrong result; the E5-E8
+studies **SKIP cleanly** (not FAIL) when a prerequisite is missing (no
+`bcftools`/`tabix`, no network, an unsealed env, or the absent draft E8 bundle). The
+studies auto-run under a TenSEAL-capable interpreter — if the launching `python3`
+lacks TenSEAL they transparently re-exec into a sealed application env.
+
+**Just the synthetic core — no server, no real data, ~90 seconds:**
 
 ```bash
 bash run_all.sh            # fast: E1 (exactness taxonomy) + E4 (differencing)
@@ -112,10 +127,16 @@ per-contributor TenSEAL re-import startup), not the isolated hosted stage.
 - `e1..e4_*.sh` — the four experiments (above).
 - `verify.py` — consolidate `results/raw/*.json` into `results/*.csv` and ASSERT
   the invariants; exit non-zero on any failure.
-- `run_all.sh` — setup + experiments + verify, one command.
-- `e5_real_human_dna_igsr.sh` — optional public-real-DNA demonstration, separate
-  from the no-network/no-real-data paper harness.
-- `lib.sh` — shared config (offline `blind` wrapper, seed, application list).
+- `run_all.sh` — setup + synthetic experiments + verify, one command.
+- `replicate_all.sh` — the full E1-E8 driver: run_all + fetch + E5-E8 + PASS/SKIP/FAIL table.
+- `fetch_public_data.sh` — download the bounded public 1000 Genomes slices E5-E8 read
+  (into a git-ignored `data/` cache); `DATA_SOURCES.md` pins the exact URLs/windows.
+- `e5_real_human_dna_igsr.sh` … `e8_public_ld_window.sh` — the optional public-real-DNA
+  studies (network + `bcftools`), separate from the no-network/no-real-data core.
+- `public_genomics_common.py` — shared helpers for E5-E8 (layout-agnostic root,
+  TenSEAL re-exec + clean SKIP, bounded VCF fetch).
+- `lib.sh` — shared config (offline `blind` wrapper, seed, application lists,
+  layout-agnostic `applications/` + `cli/` resolution).
 - `results/expected/` — committed machine-independent reference values.
 
 ## Requirements

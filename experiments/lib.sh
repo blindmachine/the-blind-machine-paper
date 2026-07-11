@@ -10,9 +10,38 @@
 set -euo pipefail
 
 EXP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$EXP_DIR/../../.." && pwd)"
-APPS_DIR="$REPO_ROOT/applications"
-CLI_DIR="$REPO_ROOT/cli"
+
+# Locate applications/ and cli/ by walking UP from experiments/. This works in BOTH
+# layouts without editing: the monorepo (docs/paper/experiments + <repo>/applications
+# + <repo>/cli, several levels up) and the published paper package (experiments/ with
+# sibling applications/ and a vendored cli/). The old hardcoded "$EXP_DIR/../../.."
+# pointed ABOVE a standalone clone, which is exactly why an outside reviewer's
+# `run_all.sh` could not find the bundles. Override with BLIND_PAPER_APPS_DIR /
+# BLIND_CLI_DIR.
+_blind_find_up() {  # $1 = directory name to find; prints abs path, returns non-zero if none
+  local name="$1" d="$EXP_DIR"
+  while :; do
+    if [ -d "$d/$name" ]; then ( cd "$d/$name" && pwd ); return 0; fi
+    [ "$d" = "/" ] && return 1
+    d="$(dirname "$d")"
+  done
+}
+
+APPS_DIR="${BLIND_PAPER_APPS_DIR:-$(_blind_find_up applications || true)}"
+CLI_DIR="${BLIND_CLI_DIR:-$(_blind_find_up cli || true)}"
+REPO_ROOT="${APPS_DIR%/applications}"
+
+if [ -z "$APPS_DIR" ] || [ ! -d "$APPS_DIR" ]; then
+  echo "lib.sh: could not locate an 'applications/' directory above $EXP_DIR." >&2
+  echo "        Set BLIND_PAPER_APPS_DIR to the directory holding the signed bundles." >&2
+  exit 1
+fi
+if [ -z "$CLI_DIR" ] || [ ! -d "$CLI_DIR" ]; then
+  echo "lib.sh: could not locate a 'cli/' Blind CLI checkout above $EXP_DIR." >&2
+  echo "        The published paper package vendors it at ./cli; the monorepo has <repo>/cli." >&2
+  echo "        Set BLIND_CLI_DIR to a github.com/blindmachine/blind checkout to override." >&2
+  exit 1
+fi
 
 # A self-contained, experiment-local ~/.blind so a run never touches the
 # reviewer's real CLI state and is trivially discarded (rm -rf .blind-home).
@@ -39,6 +68,13 @@ APPLICATIONS=(
 )
 ADDITIVE=(allele_frequency_count carrier_count cohort_histogram polygenic_score_aggregate)
 MULTIPLICATIVE=(allele_frequency_with_variance genotype_phenotype_covariance)
+
+# The E8 appendix bundle. It is a DRAFT (unsigned, not in the public registry), kept
+# separate from the six signed paper bundles. setup.sh seals its env too so E8 can run
+# locally under real BFV; if it is absent, E8 SKIPs. Keep in sync with
+# public_genomics_common.py::_SEALED_ENV_APPS.
+DRAFT_APPLICATIONS=(genotype_pair_ld)
+ALL_APPLICATIONS=("${APPLICATIONS[@]}" "${DRAFT_APPLICATIONS[@]}")
 
 # Run the offline `blind` CLI from its own uv environment, pointed at the
 # experiment-local store. Stdout stays clean JSON under `--json`.
