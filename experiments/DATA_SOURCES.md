@@ -72,3 +72,20 @@ same `BLIND_1000G_*` variables is a one-line follow-up.)
 Pointing at the authoritative source (rather than redistributing genomes) is
 better on both counts: reviewers get the authentic, checksummed bytes from IGSR,
 and no human genetic data ever lives in our repository.
+
+## E9 — HEPRS reproduction (vendored public example)
+
+E9 is different from E5–E8: it reproduces a **published FHE-PRS study** (Knight et
+al. 2026, HEPRS) rather than querying IGSR. Its data is the HEPRS repository's own
+**public example** — **synthetic** genotypes generated with HAPGEN2, MIT-licensed —
+which we vendor **unmodified** under
+`heprs_prs_reproduction_2026_07_17/example_data/` (with HEPRS's `HEPRS_LICENSE`
+alongside). Because it is synthetic and openly licensed, it is safe to commit and
+E9 runs fully offline. Provenance and the exact reproduction claim are in
+[`heprs_prs_reproduction_2026_07_17/PROVENANCE.md`](heprs_prs_reproduction_2026_07_17/PROVENANCE.md).
+
+HEPRS's headline **real** result (110,258-SNP schizophrenia model on 1,146
+PsychENCODE individuals) uses **controlled-access** genotypes that are **not**
+redistributed. E9 reproduces the public example exactly, runs a synthetic
+HAPGEN2-style scaling sweep at matched sizes, and **cites** HEPRS's real-data
+accuracy — the same human-data policy as E5–E8: no controlled data in the repo.

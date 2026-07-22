@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import json as _json
 import os
+import sys
 
 import typer
 
 from blind import console
 from blind.context import Context, emit, set_current
-from blind.errors import UsageError
+from blind.errors import UsageError, VerificationError
 from blind.hashing import split_application_id
 from blind.version import __version__
 
@@ -42,6 +43,33 @@ RESOURCES = [
     "jobs", "results", "certificates", "simulations", "dev",
 ]
 
+_MAX_CREDENTIAL_BYTES = 16 * 1024
+
+
+def _read_secret_stdin(label: str) -> str:
+    if sys.stdin.isatty():
+        value = typer.prompt(label, hide_input=True)
+    else:
+        value = sys.stdin.read(_MAX_CREDENTIAL_BYTES + 1)
+        if value.endswith("\n"):
+            value = value[:-1]
+            if value.endswith("\r"):
+                value = value[:-1]
+        if "\n" in value or "\r" in value:
+            raise UsageError(f"Invalid multiline {label} received on stdin")
+    if not value or len(value.encode("utf-8")) > _MAX_CREDENTIAL_BYTES:
+        raise UsageError(f"Invalid {label} received on stdin")
+    return value
+
+
+def _version_callback(value: bool) -> None:
+    # Eager --version: print and exit before the rest of the callback runs, so
+    # `blind --version` works with no subcommand (mirrors the `blind version`
+    # subcommand's human line).
+    if value:
+        console.console.print(f"blind {__version__}")
+        raise typer.Exit()
+
 
 @app.callback()
 def main(
@@ -51,9 +79,13 @@ def main(
     color: str = typer.Option("auto", "--color", help="auto|on|off"),
     api: str = typer.Option(None, "--api", help="override platform base URL"),
     profile: str = typer.Option("default", "--profile"),
-    api_key: str = typer.Option(None, "--api-key", help="API key for this invocation"),
+    api_key_stdin: bool = typer.Option(
+        False, "--api-key-stdin", help="read the invocation API key from stdin"),
     project: str = typer.Option(None, "--project", help="active project for scoped commands"),
     yes: bool = typer.Option(False, "--yes", "-y", help="assume yes at confirmations"),
+    version: bool = typer.Option(
+        None, "--version", help="Show the CLI version and exit.",
+        is_eager=True, callback=_version_callback),
 ):
     # Env fallbacks so a wrapping process (CI, the desktop GUI that shells out)
     # can force output mode without threading a flag through every invocation.
@@ -61,6 +93,7 @@ def main(
     json = json or _env_flag("BLIND_JSON")
     quiet = quiet or _env_flag("BLIND_QUIET")
 
+    api_key = _read_secret_stdin("API key") if api_key_stdin else None
     context = Context(json=json, quiet=quiet, color=color, api=api, profile=profile,
                       api_key=api_key, project=project, assume_yes=yes)
     ctx.obj = context
@@ -126,24 +159,13 @@ def credits(ctx: typer.Context):
     ], kind="info"))
 
 
-@app.command()
-def login(
-    ctx: typer.Context,
-    api_key: str = typer.Option(None, "--api-key", help="non-interactive key exchange"),
-):
-    """Obtain and store an API token (device/browser code flow, or --api-key)."""
-    context: Context = ctx.obj
-    from blind.login import login_with_api_key, login_with_device
+def _prompt_password(confirm: bool) -> str:
+    return typer.prompt("Password", hide_input=True, confirmation_prompt=confirm)
 
-    client = context.client(token=None)
-    key = api_key or context.api_key
-    if key:
-        result = login_with_api_key(client, key)
-    else:
-        def prompt(user_code, uri):
-            console.console.print(
-                f"Approve this device: {uri}\n  code: {user_code}")
-        result = login_with_device(client, on_prompt=prompt)
+
+def _persist_login(context: Context, result) -> None:
+    """Store the bearer token + account for the active profile, then report it —
+    shared by `login` and `register` so both end in the same authenticated state."""
     context.store.save_token(context.profile, result.token)
     cfg = context.config
     cfg["account"] = result.account.get("email") or result.account.get("account")
@@ -152,6 +174,73 @@ def login(
             "account": cfg.get("account")}
     emit(context, view, lambda: console.line("create", "login",
                                              f"{cfg.get('account','')} ({result.method})"))
+
+
+@app.command()
+def login(
+    ctx: typer.Context,
+    api_key_stdin: bool = typer.Option(False, "--api-key-stdin", help="read an API key from stdin"),
+    email: str = typer.Option(None, "--email", help="account email (password login)"),
+    password: str = typer.Option(None, "--password", help="account password"),
+    password_stdin: bool = typer.Option(
+        False, "--password-stdin", help="read the account password from stdin"),
+):
+    """Obtain and store a token by hidden prompt, stdin, or device flow."""
+    context: Context = ctx.obj
+    from blind.login import login_with_api_key, login_with_device, login_with_password
+
+    client = context.client(token=None)
+    key = _read_secret_stdin("API key") if api_key_stdin else context.api_key
+    if email and key:
+        raise UsageError("Choose email/password login or API-key login, not both")
+    if (password is not None or password_stdin) and not email:
+        raise UsageError("--password and --password-stdin require --email")
+    if password is not None and password_stdin:
+        raise UsageError("Choose --password or --password-stdin, not both")
+    if email:
+        account_password = password
+        if account_password is None:
+            account_password = (
+                _read_secret_stdin("Password")
+                if password_stdin
+                else _prompt_password(confirm=False)
+            )
+        result = login_with_password(client, email, account_password)
+    elif key:
+        result = login_with_api_key(client, key)
+    else:
+        def prompt(user_code, uri):
+            console.console.print(
+                f"Approve this device: {uri}\n  code: {user_code}")
+        result = login_with_device(client, on_prompt=prompt)
+    _persist_login(context, result)
+
+
+@app.command()
+def register(
+    ctx: typer.Context,
+    email: str = typer.Option(..., "--email", help="the email to register"),
+    password: str = typer.Option(None, "--password", help="the password to register"),
+    password_stdin: bool = typer.Option(
+        False, "--password-stdin", help="read the password from stdin"),
+):
+    """Create an account from the CLI and store its token — you never need the web
+    app to sign up (that's only for people who prefer a browser). Afterward the CLI
+    is fully authenticated, exactly as if you had run `blind login`."""
+    context: Context = ctx.obj
+    from blind.login import register_with_password
+
+    if password is not None and password_stdin:
+        raise UsageError("Choose --password or --password-stdin, not both")
+    pw = password
+    if pw is None:
+        pw = (
+            _read_secret_stdin("Password")
+            if password_stdin
+            else _prompt_password(confirm=True)
+        )
+    result = register_with_password(context.client(token=None), email, pw)
+    _persist_login(context, result)
 
 
 @app.command()
@@ -243,7 +332,7 @@ def post(
 @app.command()
 def verify(ctx: typer.Context, target: str = typer.Argument(None),
            project: str = typer.Option(None, "--project")):
-    """Core trust command: verify an application, certificate, result, or project event chain."""
+    """Core trust command: verify an application, certificate, or project event chain."""
     kind = _classify(target, project)
     if kind == "application":
         from blind.cli.groups.applications import verify as pv
@@ -251,16 +340,13 @@ def verify(ctx: typer.Context, target: str = typer.Argument(None),
     elif kind == "certificate":
         from blind.cli.groups.certificates import verify as cv
         cv(ctx, hash=target, file=None, application=None)
-    elif kind == "result":
-        from blind.cli.groups.results import verify as rv
-        rv(ctx, target, local=False, inputs=None, context=None, bundle=None,
-           project=None, timeout=300, interval=2.0)
     elif kind == "project":
         from blind.cli.groups.projects import events as pe
         pe(ctx, project or target, since=None, verify=True)
     else:
         raise UsageError(f"Cannot classify verify target {target!r}. "
-                         "Use name@digest, a cert hash, a job id, or --project <id>.")
+                         "Use name@digest, a cert hash, or --project <id>. "
+                         "To inspect a job, use `blind explain <job_id>`.")
 
 
 @app.command()
@@ -310,35 +396,69 @@ def _classify(target: str | None, project: str | None) -> str:
 @app.command()
 def contribute(
     ctx: typer.Context,
-    link: str = typer.Argument(..., help="the invite link, e.g. https://blindmachine.org/c/abc123"),
+    link: str = typer.Argument(
+        ..., metavar="LINK_OR_TOKEN",
+        help="the owner-signed invite link, as https://…/c/<token>#k=<key> or "
+             "<token>#k=<key> (resolved against the configured --api host)"),
     file: str = typer.Argument(..., help="your raw input vector, e.g. ./my_vector.csv"),
     pin_context: str = typer.Option(
-        None, "--pin-context", help="override the invite packet's public-context digest"),
+        None, "--pin-context",
+        help="pin the public-context digest from a channel SEPARATE from the link "
+             "(two-channel high-assurance anchor)"),
 ):
     """Contribute one encrypted vector to a study — the data owner's ONE command.
 
     Porcelain over `applications install` + `contributions create`. It resolves the
-    project, the pinned application, and the public-context digest from the invite
-    LINK alone (no project id to copy), installs and verifies the signed application
-    if it is not already present, then encodes and encrypts LOCALLY and uploads only
-    ciphertext. No account is created and the raw file never leaves the machine; the
-    packet's public-context digest is auto-pinned, so a malicious server cannot
-    substitute its own key. Use the lower-level `contributions create` for scripting.
+    project and pinned application from the invite LINK alone (no project id to copy),
+    installs and verifies the signed application if not already present, then encodes
+    and encrypts LOCALLY and uploads only ciphertext. No account is created and the
+    raw file never leaves the machine.
+
+    You can pass the full invite link OR just its token/hash — the `https://<host>/c/`
+    prefix is optional and the token is resolved against the configured `--api` host.
+    The `#k=<key>` fragment is mandatory because it authenticates the keyholder's
+    signed invitation before any application is installed or raw input is read.
+
+    Public-context trust (RFC 0003): when the invite link carries the keyholder's
+    signing key in its `#k=` fragment, the owner-signed invitation is verified before
+    encrypting and the bound digest is pinned — a malicious server cannot substitute
+    its own key. Unsigned links are refused. Use the lower-level `contributions
+    create --pin-context <digest>` for an explicit two-channel scripted flow.
     """
     context: Context = ctx.obj
     from blind.cli.groups.applications import install as applications_install
     from blind.cli.groups.contributions import _invite_token, create as contributions_create
     from blind.workspace import installed_bundle
 
+    link = link.strip()
     token = _invite_token(link)
     packet = context.client(token=token).get_invitation_packet(token)
     project = packet.get("project_id")
     application = packet.get("application")
-    context_pin = pin_context or packet.get("public_context_digest")
     if not project or not application:
         raise UsageError(
             "That invite link did not resolve to a project and application — ask the "
             "researcher for a fresh link.")
+    from blind.invitations import (
+        check_intent_matches_link,
+        link_owner_key,
+        verify_invitation,
+    )
+
+    owner_key = link_owner_key(link)
+    intent = packet.get("signed_intent")
+    signature = packet.get("invitation_signature")
+    if not owner_key or not intent or not signature:
+        raise VerificationError(
+            "Contributor link is not owner-signed; ask the keyholder for a fresh link containing #k="
+        )
+    verify_invitation(owner_key, intent, signature)
+    check_intent_matches_link(
+        intent,
+        token=token,
+        expected_project_id=str(project),
+        expected_application_digest=split_application_id(application)[1],
+    )
 
     if not context.quiet and not context.json:
         console.line("inspect", packet.get("project_name") or str(project),
@@ -352,13 +472,14 @@ def contribute(
     except Exception:
         if context.json:
             raise
-        applications_install(ctx, name=application, version=None, force=False, no_seal=False)
+        applications_install(ctx, name=application, version=None, force=False)
 
-    # Reuse the full, hardened contribution path (encode/encrypt LOCAL, upload
-    # ciphertext only, auto-pinning the packet's public-context digest).
+    # Reuse the full, hardened contribution path. Verification (owner signature via
+    # the link's #k= fragment, or --pin-context) happens inside `contributions create`
+    # — we do NOT auto-pin the packet's UNSIGNED digest (that defends against nothing).
     contributions_create(
         ctx, project=str(project), data=file, link=link, application=application,
-        pin_context=context_pin, append_sentinel=True)
+        pin_context=pin_context, append_sentinel=True)
 
 
 # `simulate` alias for `simulations create`

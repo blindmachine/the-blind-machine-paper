@@ -26,15 +26,15 @@ stdout/stderr are for logs only.
 
     { "artifact": "<abs path>", "sha256": "sha256:...", "meta": { ... } }
 
-The runner is one of:
-  * ``uv --project env run --frozen python <stage_file> <workdir>``  (the sealed env), or
-  * ``python3 <stage_file> <workdir>``  (fallback / tests: $BLIND_STAGE_RUNNER=direct)
+This legacy workdir adapter is retained only for explicit development fixtures.
+Production commands use the argparse adapters in ``runtime.compute``, which run
+inside the fail-closed container sandbox. There is no implicit host fallback.
 
 NOTE — the server does NOT use this workdir/input.json convention. The hosted
 worker invokes ``30_compute_encrypted.py`` via its argparse interface
 (``--context <public_context> --inputs <ct...> --out <result>``) inside a
 ``--network none`` sealed sandbox. The local mirror of that server invocation
-lives in ``blind/runtime/compute.py`` (used by ``results verify --local``);
+lives in ``blind/runtime/compute.py`` (used by the simulate/compute path);
 this module is the LOCAL runner for the other numbered stages and for stub
 bundles that honor the input.json convention.
 """
@@ -42,8 +42,7 @@ bundles that honor the input.json convention.
 from __future__ import annotations
 
 import json
-import os
-import subprocess
+import subprocess  # nosec B404
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -52,7 +51,7 @@ from pathlib import Path
 from blind.errors import UsageError
 from blind.hashing import sha256_file
 from blind.runtime.bundle import Bundle
-from blind.runtime.sealer import uv_available
+from blind.runtime.sandbox import scrubbed_direct_env, unsafe_direct_enabled
 
 
 @dataclass
@@ -65,16 +64,12 @@ class StageResult:
 
 
 def _runner_cmd(bundle: Bundle, stage_file: Path, workdir: Path) -> list[str]:
-    mode = os.environ.get("BLIND_STAGE_RUNNER", "auto")
-    if mode == "direct":
+    if unsafe_direct_enabled():
         return [sys.executable, str(stage_file), str(workdir)]
-    if mode == "auto" and uv_available() and (bundle.env_dir() / "uv.lock").exists():
-        return [
-            "uv", "--project", "env", "run", "--frozen",
-            "python", str(stage_file), str(workdir),
-        ]
-    # Fallback: system interpreter (used for stub crypto stages / when uv absent).
-    return [sys.executable, str(stage_file), str(workdir)]
+    raise UsageError(
+        "The legacy workdir stage adapter is disabled outside explicit tests; "
+        "use the sandboxed argparse stage interface"
+    )
 
 
 def run_stage(
@@ -97,12 +92,13 @@ def run_stage(
 
     cmd = _runner_cmd(bundle, stage_file, workdir)
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # nosec B603
             cmd,
             cwd=str(bundle.root),
             capture_output=True,
             timeout=timeout,
             text=True,
+            env=scrubbed_direct_env(bundle.root),
         )
     except FileNotFoundError as exc:
         raise UsageError(f"Stage runner not found: {exc}") from exc
@@ -110,7 +106,8 @@ def run_stage(
     stdout, stderr = proc.stdout, proc.stderr
     if proc.returncode != 0:
         raise UsageError(
-            f"Stage {stage} ({stage_file.name}) exited {proc.returncode}: {stderr[-400:]}"
+            f"Stage {stage} ({stage_file.name}) exited {proc.returncode}; "
+            "application output was suppressed to protect private inputs"
         )
 
     out_json = workdir / "output.json"

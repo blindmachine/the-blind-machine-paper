@@ -6,10 +6,7 @@ description, its key flags, whether it is **LOCAL** (runs only on your machine),
 **REMOTE** (calls the Rails HTTP API), or **BOTH**, and which artifact hashes it
 **prints** or **verifies**.
 
-Single source of truth for *what the commands mean* (not their syntax):
-[`../docs/requirements.md`](../docs/requirements.md) and
-[`../docs/simulation_mode.md`](../docs/simulation_mode.md). This file does not
-restate them.
+This is the public command contract shipped with the standalone CLI repository.
 
 ---
 
@@ -23,8 +20,6 @@ porcelain does not hide the trust story — each command prints a Rails-style
 state transcript (aligned verb + object + hash + trust class), ends with the
 single next action, and **never freezes a cohort silently**. Every porcelain
 command supports `--json` for the desktop GUI / scripting, just like the plumbing.
-
-Origin: [`../docs/audits/simplification/2026-07-08-project-owner-data-owner-loop.md`](../docs/audits/simplification/2026-07-08-project-owner-data-owner-loop.md).
 
 **The five porcelain commands** (one human verb per step of the loop):
 
@@ -40,7 +35,8 @@ Porcelain flags: `projects start` takes `--name`, `--min`/`--min-contributors`
 (default 20), `--scenario`; `contribute` takes `--pin-context <digest>` (override
 the invite packet's public-context digest); `projects run` takes `--yes`/`-y`
 (skip the freeze/cost confirm), `--timeout`, `--interval`. All accept the global
-flags (`--json`, `--quiet`, `--api`, `--api-key`, `--project`, …).
+flags (`--json`, `--quiet`, `--api`, `--api-key-stdin`,
+`--project`, …).
 
 The mapping, at a glance:
 
@@ -77,8 +73,8 @@ never removed.
   `jobs create/estimate/list`) read it from there or take it explicitly.
 - **`--json` on every command.** Machine-readable output is guaranteed for the
   whole surface — the future desktop GUI shells out to this CLI and parses its
-  JSON (see [`../desktop/README.md`](../desktop/README.md)); the CLI stays the
-  single trust surface, the GUI is a face over it.
+  JSON; the CLI stays the single trust surface and graphical clients are a face
+  over it.
 - **Raw-API power commands.** `blind get <path>` / `blind post <path>` hit any
   `/api/v1` path directly (like `stripe get` / `stripe post`) for scripting and
   debugging.
@@ -99,7 +95,7 @@ never removed.
 |---|---|
 | `--json` | machine-readable output (guaranteed for **every** command; the GUI depends on it) |
 | `--project <id>` | set the active project for project-scoped commands |
-| `--api-key <key>` | API key for this invocation (overrides the stored profile token) |
+| `--api-key-stdin` | read an API key from standard input without exposing it in process arguments |
 | `--profile <name>` | select an `~/.blind` auth/config profile (default `default`) |
 | `--color auto\|on\|off` | control ANSI color (default `auto`) |
 | `--api <url>` | override platform base URL (default from `config.yml`, else `https://blindmachine.org`) |
@@ -115,7 +111,9 @@ explicit flag always wins):
 | `BLIND_JSON=1` | default to `--json` output |
 | `BLIND_QUIET=1` | default to `--quiet` output |
 | `NO_COLOR=1` | disable ANSI color |
-| `BLIND_HOME=<dir>` | relocate `~/.blind` state |
+
+Local state is always rooted at `~/.blind`; credential and state-directory paths
+cannot be supplied through process arguments or environment variables.
 
 The base URL (`--api` / `config.yml`) is guarded: a non-loopback `http://` URL is
 refused so a bearer token never travels in cleartext, and a single dim notice is
@@ -141,10 +139,11 @@ an account token — a contributor never needs a The Blind Machine account.
 
 | Command | Description | LOCAL/REMOTE | Key flags | Hashes |
 |---|---|---|---|---|
-| `blind login` | Obtain and store an API token (device/browser code flow) | REMOTE | `--api-key <key>` (non-interactive), `--profile` | — |
+| `blind register` | Create an account and store its token — the CLI is the full surface, so signup never requires the web app | REMOTE | `--email <e>`; hidden password prompt, `--password <p>`, or `--password-stdin` | — |
+| `blind login` | Obtain and store an API token by email/password, API key, or device/browser code flow | REMOTE | `--email <e>` plus hidden prompt, `--password <p>`, or `--password-stdin`; `--api-key-stdin`; `--profile` | — |
 | `blind logout` | Delete the stored token for the profile | LOCAL | `--profile` | — |
 | `blind config` | View or edit `~/.blind/config.yml` (api URL, active profile, output prefs, account) | LOCAL | `--list`, `--set k=v`, `--json` | — |
-| `blind doctor` | Verify Python, the **sandbox/container runtime** (`podman`/`docker`, `--network none` ok), the **`uv` env-sealer**, OS keychain, `cryptography` (Ed25519), `~/.blind` perms, a **sealed-env self-test** (newest installed application imports its own crypto), and API reachability | BOTH | `--json`, `--offline` (skip API ping) | — |
+| `blind doctor` | Verify Python, the **sandbox/container runtime** (`podman`/`docker`, `--network none` ok), the **`uv` env-sealer**, OS keychain, `cryptography` (Ed25519), `~/.blind` perms, a **sealed-env self-test** (newest installed application imports its own crypto), and API reachability | BOTH | `--offline` (skip API ping); machine-readable output is the **global** flag: `blind --json doctor` | — |
 | `blind version` | Print CLI version (and the sandbox-runtime + `uv` sealer versions) | LOCAL | `--json` | — |
 | `blind resources` | List the resource types (`applications`, `projects`, `keys`, …) | LOCAL | `--json` | — |
 | `blind credits` | Show the account's credit balance (one credit = one US dollar) and the `/billing` top-up URL | REMOTE | `--json` | — |
@@ -162,8 +161,8 @@ reachability is checked. Data owners contributing via a link do **not** log in.
 `verify` and `explain` are aliases over the resource-specific trust surface:
 `blind verify allele_frequency_count@sha256:…` runs `applications verify`;
 `blind verify <certificate_hash>` runs `certificates verify`;
-`blind verify <job_id>` runs `results verify`; `blind verify --project <id>`
-runs `projects events --verify`. `blind explain <name@digest>` runs
+`blind verify --project <id>` runs `projects events --verify`. To inspect a job,
+use `blind explain <job_id>`. `blind explain <name@digest>` runs
 `applications explain`; certificate/result/project targets print the bound hashes,
 release policy, and verification steps.
 
@@ -175,7 +174,7 @@ release policy, and verification steps.
 |---|---|---|---|---|
 | `blind applications list` | List curated registry applications (name, crypto hint, min-N, latest digest) | REMOTE | `--crypto <hint>` (e.g. `tenseal-bfv`), `--json` | prints each `application digest` |
 | `blind applications retrieve <name[@digest]>` | Show a application's manifest, crypto hint, params, coordinate definition, versions | REMOTE | `--version <digest>`, `--json` | prints `application digest`, `coordinate_hash` |
-| `blind applications install <name[@digest]>` | Download + **verify The Blind Machine signature** + digest, unpack into `~/.blind/applications/<name>@<digest>/`, then run `uv --project env sync --frozen --no-dev` in a **network-enabled BUILD phase** to seal a pinned env and record `env_lock` | BOTH | `--version <digest>`, `--force`, `--no-seal` (skip env build), `--json` | **verifies** `application digest` (recompute == server), checks Ed25519 signature; **records** `env_lock` |
+| `blind applications install <name[@digest]>` | Download + **verify The Blind Machine signature** + digest, unpack into `~/.blind/applications/<name>@<digest>/`, then seal its locked environment in a data-free, digest-pinned container build phase | BOTH | `--version <digest>`, `--force`, `--json` | **verifies** `application digest` before and after build, checks Ed25519 signature, records `env_lock` |
 | `blind applications verify <name@digest>` | Re-verify an installed bundle's digest + signature **and its sealed-env `env_lock`** offline | LOCAL | `--all`, `--json` | **verifies** `application digest`, signature, `env_lock` |
 | `blind applications explain <name@digest>` | Plain-language: what it computes, crypto approach, why, what the coordinate definition is, what leaks | LOCAL | `--json` | prints `application digest`, `coordinate_hash` |
 | `blind applications test <name@digest>` | Run the bundle's `test_vectors/` locally in the sealed env (bit-exact for BFV integer, tolerance for CKKS) | LOCAL | `--vector <id>`, `--compute-only`, `--json` | prints per-vector expected/actual, tolerance |
@@ -184,13 +183,14 @@ release policy, and verification steps.
 application is content-addressed and its digest must equal the name suffix and the
 server's, and its The Blind Machine signature must validate, or it will not load.
 `install` also runs `uv --project env sync --frozen --no-dev` in a **two-phase**
-model — a network-enabled **build phase** (fetch uv-locked deps → seal a
-container image / venv, record `env_lock`; this phase never sees data) followed
-by data-only, network-forbidden **run phases**. Every later stage — local
+model — a network-enabled, data-free **build phase** (fetch uv-locked deps into
+the sealed venv and record `env_lock`) followed by network-forbidden **run
+phases**. Both phases use a digest-pinned runner with a read-only root, a non-root
+UID, dropped capabilities, `no-new-privileges`, and bounded resources. Every
+later stage — local
 (`00_keygen.py`/`10_encode.py`/`20_encrypt.py`/`40_decrypt.py`/`50_decode.py`) and
 server (`30_compute_encrypted.py`) — runs inside that sealed, `--network none`
-sandbox. See
-[`../docs/application_structure.md`](../docs/application_structure.md).
+sandbox. There is no production host-interpreter fallback or public bypass flag.
 
 **Deferred to v2 (third-party public registry applications).** v1 ships **curated,
 signed applications only**, so the write verbs — `applications create`,
@@ -236,8 +236,9 @@ server's. Neither moves a secret.†
 | Command | Description | LOCAL/REMOTE | Key flags | Hashes |
 |---|---|---|---|---|
 | `blind keys create --project <id>` | **Locally** run the application's `00_keygen.py` (in the sealed env) to generate the project keypair; store the secret in the OS keychain; publish only the Public Crypto Context | LOCAL † | `--force`, `--json` | prints + publishes `public-context hash`; secret never leaves the machine |
-| `blind keys retrieve --project <id>` | Status: where the secret lives (keychain vs fallback file), and whether the local public context matches the server's | LOCAL † | `--json` | **verifies** local `public-context hash` == server's |
-| `blind keys list` | List local keypairs across projects (project, crypto hint, keychain vs fallback) | LOCAL | `--json` | prints each `public-context hash` |
+| `blind keys publish --project <id>` | Retry publication of an existing Public Crypto Context and owner signing public key without regenerating any private material | REMOTE † | `--json` | verifies local artifacts and prints `public-context hash` |
+| `blind keys retrieve --project <id>` | Status: whether the secret is in the keychain (or an explicitly enabled insecure file backend), and whether the local public context matches the server's | LOCAL † | `--json` | **verifies** local `public-context hash` == server's |
+| `blind keys list` | List local keypairs across projects and report their secret backend | LOCAL | `--json` | prints each `public-context hash` |
 | `blind keys export-public --project <id>` | Write the Public Crypto Context to a file to share with contributors (safe to publish) | LOCAL | `--out <path>`, `--json` | prints `public-context hash` |
 | `blind keys delete --project <id>` | Delete the **local** key material (keychain entry + `~/.blind` refs). Local only — does not touch the server | LOCAL | `--yes`, `--json` | — |
 
@@ -292,7 +293,7 @@ it is not already cached locally, but produces only a local artifact — run
 
 | Command | Description | LOCAL/REMOTE | Key flags | Hashes |
 |---|---|---|---|---|
-| `blind jobs estimate --project <id>` | Return the **marked-up CPU-second cost estimate** before running (no dispatch) | REMOTE | `--json` | prints `cohort commitment` (if frozen), estimated cost |
+| `blind jobs estimate --project <id>` | Return the **CPU-minute cost estimate** before running (no dispatch) | REMOTE | `--json` | prints `cohort commitment` (if frozen), estimated cost |
 | `blind jobs create --project <id>` | Request a compute run; **shows the cost estimate and confirms** before dispatch | REMOTE | `--yes` (skip confirm), `--json` | prints `job id`, pinned `application digest`, `cohort commitment`; requires frozen cohort + min-N |
 | `blind jobs list --project <id>` | List the project's jobs (state, cost, result digest) | REMOTE | `--state`, `--json` | prints each `result digest` (when done) |
 | `blind jobs retrieve <job>` | Job status (stage, cost, result digest when done) | REMOTE | `--json`, `--watch` | prints `result digest` when done |
@@ -339,40 +340,19 @@ runs with no persisted worker stages render the exact historical 4-line shape.
 
 ---
 
-## `blind results` — download / decrypt / verify  *(BOTH; decrypt is LOCAL)*
+## `blind results` — retrieve / decrypt  *(BOTH; decrypt is LOCAL)*
 
 | Command | Description | LOCAL/REMOTE | Key flags | Hashes |
 |---|---|---|---|---|
 | `blind results retrieve <job>` | Download the **Encrypted** result ciphertext + result digest | REMOTE | `--out`, `--json` | **verifies** downloaded `result digest` == server's |
 | `blind results decrypt <job>` | Download if needed, then **locally** decrypt with the keychain secret → the aggregate; recover sentinel N | BOTH | `--out`, `--show` (frequencies), `--display maf`, `--json` | **verifies** `application digest`, `cohort commitment`, `result digest`; prints sentinel N, **min-N satisfied** |
-| `blind results verify <job>` | **Verify-by-re-execution**: deterministically re-run the pinned `30_compute_encrypted.py` (in the sealed, `--network none` sandbox) on the same ciphertexts → bit-identical result digest | BOTH | `--local` (recompute here), `--inputs <dir>` (with `--local`), `--context <path>`, `--bundle <dir>`, `--timeout <s>` / `--interval <s>` (server-mode polling), `--json` | **verifies** same ciphertexts in → same `result digest` out (determinism, **not** ZK) |
 
 Decryption happens on your machine with the secret key from the OS keychain; the
 plaintext aggregate is a local artifact until you choose to publish it.
 
-`results verify` has two modes (the JSON view carries `mode: "server"|"local"`):
-
-* **server** (default) — `POST /jobs/:id/reexecute` spawns a QUEUED,
-  non-billable re-execution run (its `result_digest`/`matches` are null at
-  creation — the 201 is not a verdict). The CLI polls that run (`--interval`,
-  default 2s) until it reaches a terminal state (`--timeout`, default 300s),
-  then compares the recomputed digest against the original job's
-  `result_digest` (a server `matches` verdict, when present, is respected).
-  If the re-execution failed, the CLI surfaces its `failure_reason`; if it is
-  still pending at the timeout, the CLI exits with a precondition error —
-  never a fabricated verdict.
-* **`--local`** — honest local re-execution: the CLI resolves the pinned,
-  installed bundle (or `--bundle <dir>`), then runs `30_compute_encrypted.py`
-  HERE exactly as the server does (argparse `--context/--inputs/--out`, inputs
-  sorted ascending by their sha256 digest — the server's canonical order) over
-  the ciphertext files in `--inputs <dir>`, and compares the recomputed digest
-  to the server's `result_digest`. Individual cohort ciphertexts are NEVER
-  served, so `--local` is for synthetic or self-owned cohorts where you already
-  hold the input files.
-
-In both modes digest comparison is encoding-normalized: the platform serves
-result digests as bare 64-hex while the CLI's canonical printed form is
-`sha256:<hex>` — the same value, compared on the hex.
+Digest comparison is encoding-normalized: the platform serves result digests as
+bare 64-hex while the CLI's canonical printed form is `sha256:<hex>` — the same
+value, compared on the hex.
 
 ---
 
@@ -409,7 +389,7 @@ no server**.
 | `blind simulations list` | List local simulation runs under `~/.blind/simulations/` (hash, application, cohort sizes, date) | LOCAL | `--json` | prints each `sim-run-hash`, `application digest` |
 | `blind simulations retrieve <sim-run-hash>` | Show one simulation run's config + artifacts (equivalence, benchmark, methods, threat model, provenance) | LOCAL | `--json`, `--emit …` | prints `sim-run-hash`, `application digest`, `coordinate_hash` |
 
-Full flag shape for `create` / `simulate` (SSoT: `../docs/simulation_mode.md` §6):
+Full flag shape for `create` / `simulate`:
 
 | Flag | Meaning |
 |---|---|
@@ -513,9 +493,14 @@ Context or a secret key. `keys create` uploads the public context only.
 ### Auth  (`login`, `config`, `doctor`)
 | Method + path | Purpose | Used by |
 |---|---|---|
+| `POST /api/v1/auth/registration` | Create an account, return a bearer token | `register` |
 | `POST /api/v1/auth/device` | Start device/browser code login | `login` |
-| `POST /api/v1/auth/token` | Exchange code (or API key) for a bearer token | `login` |
-| `GET  /api/v1/me` | Current account + reachability | `login` (verify), `config --list`, `doctor` |
+| `POST /api/v1/auth/token` | Exchange a device code, API key, OR email+password for a bearer token | `login` |
+| `GET  /api/v1/me` | Current account + reachability | `login`/`register` (verify), `config --list`, `doctor` |
+
+The CLI is the complete surface: `register` + the email/password grant mean a user
+never has to touch the web app to create an account or sign in (the web signup is the
+browser twin of the same flow). All grants return `{ access_token, token_type, account }`.
 
 ### `credits`  (billing)
 | Method + path | Purpose | Used by |
@@ -568,7 +553,7 @@ Context or a secret key. `keys create` uploads the public context only.
 ### `jobs`  (compute on ciphertext)
 | Method + path | CRUD/verb | Purpose | Used by |
 |---|---|---|---|
-| `POST /api/v1/projects/:id/jobs/estimate` | action | Return marked-up CPU-second cost estimate (no dispatch) | `jobs estimate` |
+| `POST /api/v1/projects/:id/jobs/estimate` | action | Return CPU-minute cost estimate (no dispatch) | `jobs estimate` |
 | `POST /api/v1/projects/:id/jobs` | create | Create + dispatch a compute job (requires frozen cohort + min-N + run cap) | `jobs create` |
 | `GET  /api/v1/projects/:id/jobs` | list | List the project's jobs | `jobs list` |
 | `GET  /api/v1/jobs/:id` | retrieve | Job status + result digest when done | `jobs retrieve` |
@@ -579,14 +564,13 @@ Context or a secret key. `keys create` uploads the public context only.
 | Method + path | CRUD/verb | Purpose | Used by |
 |---|---|---|---|
 | `GET  /api/v1/jobs/:id/result` | retrieve | Download Encrypted result ciphertext + `result_digest` | `results retrieve` / `decrypt` |
-| `POST /api/v1/jobs/:id/reexecute` | action | Verify-by-re-execution → returns recomputed `result_digest` | `results verify` |
 | `GET  /api/v1/projects/:id/certificates` | list | List a project's certificates (one per completed job) | `certificates list` |
 
 ### Public verification (no auth)
 | Method + path | CRUD/verb | Purpose | Used by |
 |---|---|---|---|
 | `GET  /api/v1/certificates/:certificate_hash` | retrieve | Public certificate fetch for a Blind Result Page | `certificates retrieve` / `verify` |
-| `GET  /api/v1/results/:result_digest` | retrieve | Public result-digest lookup for offline verification | `certificates verify`, `results verify` |
+| `GET  /api/v1/results/:result_digest` | retrieve | Public result-digest lookup for offline verification | `certificates verify` |
 
 ### Raw power commands
 `blind get <path>` and `blind post <path>` issue an authenticated request to any
@@ -607,7 +591,7 @@ Context or a secret key. `keys create` uploads the public context only.
 | contributions | — | list, retrieve | create |
 | data | encode, encrypt | — | — |
 | jobs | — | estimate, create, list, retrieve, logs, watch | — |
-| results | — | retrieve | decrypt, verify |
+| results | — | retrieve | decrypt |
 | certificates | verify | retrieve, list | — |
 | simulations | create, list, retrieve | — | — |
 | dev | run-local, run-encrypted, compare | — | — |

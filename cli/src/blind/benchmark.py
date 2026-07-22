@@ -8,14 +8,13 @@ paper's §6 evaluation needs (docs/simulation_mode.md §2, paper-plan G1/G2/G7):
     (128 / 192 / 256);
   * measure each cell with the encrypted-on-synthetic engine (runtime split,
     ciphertext bytes, peak RSS, CPU-seconds) against the cleartext oracle
-    (exactness), and price it through a cost model that mirrors the server's
-    ``COMPUTE_*`` ENV knobs;
+    (exactness), and price it through a local feasibility cost model;
   * emit ONE aggregated ``benchmark.{csv,md,tex}`` + ``plots/`` per sweep, plus
     the ``methods.md`` / ``threat_model.md`` / ``provenance.json`` paper artifacts.
 
-The cost model is a *pure* function of ``(cpu_seconds, crypto, N, L, security)``
-reading the SAME ENV var names + defaults as ``ComputationRun`` on the Rails
-side, so a sim's estimate reconciles with the server's ``jobs estimate``.
+The cost model is a *pure* function of ``(cpu_seconds, crypto, N, L, security)``.
+It prices simulation/benchmark artifacts; hosted ``jobs estimate`` calls the
+server and settlement prices the worker's measured CPU-minutes.
 matplotlib is a lazy, optional dependency (the ``plots`` extra): its absence
 skips plot rendering but never blocks the CSV/MD/TeX artifacts, keeping the
 trust-critical core CLI dependency-light and network-free.
@@ -23,6 +22,7 @@ trust-critical core CLI dependency-light and network-free.
 
 from __future__ import annotations
 
+import ast
 import csv
 import math
 import os
@@ -52,8 +52,10 @@ from blind.version import __version__
 # Cost model — pure function of (cpu_seconds, crypto, N, L, security)
 # ---------------------------------------------------------------------------
 #
-# Mirrors app/models/computation_run.rb:58-64 — same ENV var NAMES + defaults, so
-# a simulation's cost estimate equals the server's `jobs estimate`:
+# Simulation/benchmark projection only. Real `blind jobs estimate` calls the
+# server, whose billing forecast follows packed-ciphertext execution and whose
+# final charge uses measured CPU-minutes. This model instead projects
+# feasibility across hypothetical N/L/crypto/security cells:
 #   cost_cents = ceil(cpu_seconds × base × markup)
 # We additionally report the paper's *raw* (un-marked-up) compute cost
 # (paper-plan G2): raw = cpu_seconds × base.
@@ -62,7 +64,7 @@ DEFAULT_BASE_CENTS = 2.0
 DEFAULT_MARKUP = 1.5
 DEFAULT_CPU_SECONDS_PER_CONTRIBUTION = 1.0
 # The CLI's default vector length (`--length 16`); the reference L at which the
-# projection reconciles with the server's L-agnostic estimate.
+# simulation projection's length multiplier is 1.0.
 REFERENCE_LENGTH = 16
 
 
@@ -138,10 +140,10 @@ class CostBreakdown:
 
 def cost_model(cpu_seconds: float | None = None, crypto: str | None = "bfv-add",
                n: int = 1, length: int = REFERENCE_LENGTH, security: int = 128) -> CostBreakdown:
-    """Pure cost model. Given measured ``cpu_seconds`` returns the raw + marked-up
-    cost; given ``cpu_seconds=None`` it *projects* CPU-seconds from
-    ``(crypto, N, L, security)`` first. The marked-up formula is byte-identical to
-    ``ComputationRun.cost_cents_for`` (ceil(cpu × base × markup))."""
+    """Pure simulation cost model. Given measured ``cpu_seconds`` returns the
+    raw + marked-up benchmark cost; given ``cpu_seconds=None`` it *projects*
+    CPU-seconds from ``(crypto, N, L, security)`` first. This is a feasibility
+    artifact, not the hosted run quote or settled charge."""
     if cpu_seconds is None:
         cpu_seconds = project_cpu_seconds(crypto, n, length, security)
     base = base_cents_per_cpu_second()
@@ -607,40 +609,51 @@ def achieved_security(poly_modulus_degree: int, coeff_mod_bit_sizes) -> int | No
 
 
 def _security_params(bundle: Bundle, security_levels) -> dict | None:
-    """Resolve the REAL SEAL params per swept security level by reading the
-    bundle's OWN ``00_keygen.py`` (its ``SECURITY`` table + default N / t) — the
-    single source of truth, so 192/256 rows are self-describing and can never
-    drift from what keygen actually built. Loading the stage module does not import
-    TenSEAL (it is lazy-imported inside ``keygen()``). Fail-open to None."""
-    try:
-        import importlib.util
-
-        stage = bundle.stage_file("keygen")
-        spec = importlib.util.spec_from_file_location("_bench_keygen_probe", stage)
-        if spec is None or spec.loader is None:
-            return None
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        table = getattr(mod, "SECURITY", None)
-        poly = getattr(mod, "DEFAULT_POLY_MODULUS_DEGREE", None)
-        plain = getattr(mod, "DEFAULT_PLAIN_MODULUS", None)
-        if not table or poly is None:
-            return None
-        out: dict = {}
-        for level in sorted({int(s) for s in security_levels}):
-            chain = table.get(level)
-            if chain is None:
+    """Read literal SEAL constants from signed source without executing it."""
+    candidates = [
+        bundle.root / "local_project_owner.py",
+        bundle.stage_file("keygen"),
+    ]
+    for source in candidates:
+        if not source.is_file() or source.stat().st_size > 1024 * 1024:
+            continue
+        try:
+            tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+            values: dict[str, object] = {}
+            for node in tree.body:
+                name = None
+                value = None
+                if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                    name = node.targets[0].id if isinstance(node.targets[0], ast.Name) else None
+                    value = node.value
+                elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                    name = node.target.id
+                    value = node.value
+                if name in {"SECURITY", "DEFAULT_POLY_MODULUS_DEGREE", "DEFAULT_PLAIN_MODULUS"}:
+                    values[name] = ast.literal_eval(value)
+            table = values.get("SECURITY")
+            poly = values.get("DEFAULT_POLY_MODULUS_DEGREE")
+            plain = values.get("DEFAULT_PLAIN_MODULUS")
+            if not isinstance(table, dict) or not isinstance(poly, int):
                 continue
-            out[str(level)] = {
-                "poly_modulus_degree": poly,
-                "plain_modulus": plain,
-                "coeff_mod_bit_sizes": list(chain),
-                "coeff_mod_bits_total": sum(chain),
-                "achieved_security": achieved_security(poly, chain),
-            }
-        return out or None
-    except Exception:
-        return None
+            out: dict = {}
+            for level in sorted({int(item) for item in security_levels}):
+                chain = table.get(level)
+                if not isinstance(chain, (list, tuple)) or not all(
+                    isinstance(bit, int) for bit in chain
+                ):
+                    continue
+                out[str(level)] = {
+                    "poly_modulus_degree": poly,
+                    "plain_modulus": plain,
+                    "coeff_mod_bit_sizes": list(chain),
+                    "coeff_mod_bits_total": sum(chain),
+                    "achieved_security": achieved_security(poly, chain),
+                }
+            return out or None
+        except (OSError, SyntaxError, TypeError, ValueError):
+            continue
+    return None
 
 
 def write_matrix_dir(matrix: BenchmarkMatrix, out_root: Path, bundle: Bundle,

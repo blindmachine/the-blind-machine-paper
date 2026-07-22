@@ -8,51 +8,107 @@ license = { text = "MIT" }
 authors = [{ name = "The Blind Machine" }]
 keywords = ["fhe", "homomorphic-encryption", "privacy", "trust", "cli"]
 
-# Runtime deps. NOTE: `tenseal` (and any crypto library) is deliberately NOT here.
-# Crypto lives in the protocol bundles' own env/uv.lock, never in the CLI.
+# Complete, exact cross-platform runtime closure. `uvx` installs from wheel
+# metadata and does not consume this project's uv.lock, so every transitive
+# package is listed explicitly to prevent resolution drift. The release gate
+# verifies this list remains identical to the locked runtime export.
+# `tenseal` remains application-owned and lives in each signed env/uv.lock.
 dependencies = [
-    "typer>=0.12",
-    "rich>=13.7",
-    "httpx>=0.27",
-    "pydantic>=2.6",
-    "pyyaml>=6.0",
-    "platformdirs>=4.2",
-    "keyring>=25.0",
-    "cryptography>=42.0",
+    "annotated-doc==0.0.4",
+    "annotated-types==0.7.0",
+    "anyio==4.14.1",
+    "backports-tarfile==1.2.0; python_full_version < '3.12'",
+    "certifi==2026.6.17",
+    "cffi==2.0.0; platform_python_implementation != 'PyPy'",
+    "colorama==0.4.6; sys_platform == 'win32'",
+    "cryptography==49.0.0",
+    "h11==0.16.0",
+    "httpcore==1.0.9",
+    "httpx==0.28.1",
+    "idna==3.18",
+    "importlib-metadata==9.0.0; python_full_version < '3.12'",
+    "jaraco-classes==3.4.0",
+    "jaraco-context==6.1.2",
+    "jaraco-functools==4.5.0",
+    "jeepney==0.9.0; sys_platform == 'linux'",
+    "keyring==25.7.0",
+    "markdown-it-py==4.2.0",
+    "mdurl==0.1.2",
+    "more-itertools==11.1.0",
+    "platformdirs==4.10.0",
+    "pycparser==3.0; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'",
+    "pydantic==2.13.4",
+    "pydantic-core==2.46.4",
+    "pygments==2.20.0",
+    "pywin32-ctypes==0.2.3; sys_platform == 'win32'",
+    "pyyaml==6.0.3",
+    "rich==15.0.0",
+    "secretstorage==3.5.0; sys_platform == 'linux'",
+    "shellingham==1.5.4",
+    "typer==0.26.8",
+    "typing-extensions==4.16.0",
+    "typing-inspection==0.4.2",
+    "zipp==4.1.0; python_full_version < '3.12'",
 ]
 
 [project.scripts]
 blind = "blind.__main__:main"
+blindmachine = "blind.__main__:main"
 
 [project.urls]
 Homepage = "https://blindmachine.org"
-Source = "https://github.com/blindmachine/blind-cli"
+Source = "https://github.com/blindmachine/blind"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
-    "pytest-cov>=5.0",
-    "ruff>=0.5",
-    "mypy>=1.10",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.15.20",
+    "mypy==2.1.0",
 ]
 # Plotting is an OPTIONAL extra, deliberately NOT a core dependency: the
 # trust-critical CLI stays light + network-free, and `blind bench` still emits
 # CSV/MD/TeX (only the plot SVGs are skipped) when matplotlib is absent.
 plots = [
-    "matplotlib>=3.8",
+    "matplotlib==3.11.0",
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = [
+    "hatchling==1.31.0",
+    "packaging==26.2",
+    "pathspec==1.1.1",
+    "pluggy==1.6.0",
+    "trove-classifiers==2026.6.1.19",
+]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/blind"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/blind",
+    "/.gitignore",
+    "/README.md",
+    "/SECURITY.md",
+    "/LICENSE",
+    "/pyproject.toml",
+    "/uv.lock",
+]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/.DS_Store",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "live_sandbox: exercises the real Docker/Podman daemon and kernel isolation",
+]
 
 [tool.ruff]
 line-length = 100
@@ -63,7 +119,12 @@ target-version = "py311"
 # `uv run pytest` while keeping the shipped CLI dependency-light.
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
-    "pytest-cov>=5.0",
-    "matplotlib>=3.8",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "matplotlib==3.11.0",
+]
+security = [
+    "bandit==1.9.4",
+    "pip-audit==2.10.0",
+    "zizmor==1.26.1",
 ]

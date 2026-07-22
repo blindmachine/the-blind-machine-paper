@@ -2,17 +2,34 @@
 
 > The machine can compute, but it cannot see.
 
-`blind` is the command-line trust surface for [The Blind Machine](https://blindmachine.org):
-a platform for **governed, content-addressed computation on encrypted data**. Data
-owners encrypt locally, the server computes on ciphertext only, and a researcher
-decrypts only the approved aggregate — with every application, cohort, and result
-independently verifiable by hash.
+Many scientific questions go unanswered because the data needed to answer them
+cannot be pooled. The records exist — five hospitals each hold a slice of a
+rare-disease cohort — and the answer is usually a plain summary over many
+individuals: how often a variant occurs, how many people carry it, the shape of a
+distribution. But the underlying data is sensitive and lives under separate
+private custody, so it never becomes one dataset, and the summary never gets
+computed.
+
+`blind` is the command-line client for [The Blind Machine](https://blindmachine.org),
+a platform that answers those questions without ever pooling the plaintext. Each
+data owner encrypts their slice **on their own machine** with homomorphic
+encryption; the server computes on **ciphertext only** and never learns the
+plaintext; the researcher decrypts just the one approved aggregate locally. Every
+application, cohort, and result is independently verifiable by hash, and every run
+emits a certificate a skeptic can re-check offline.
+
+![The Blind Machine at a glance — a trust boundary splits a LOCAL side (data owners encode and encrypt; the researcher holds the secret key and decrypts) from the SERVER side, which sees only the public key and ciphertext and computes without ever decrypting.](docs/overview.png)
 
 **Every operation that touches plaintext or a secret key happens on your
 machine, in this CLI.** The server never runs keygen, encoding, encryption, or
 decryption. It sees ciphertext plus a public context, and nothing else. That is
 the whole point of shipping the trust surface as an auditable, open-source
-program you can read before you run.
+program you can read before you run — Kerckhoffs's principle as a product: no
+guarantee rests on the secrecy or the honesty of the server.
+
+The design, threat model, and ten reproducible experiments are written up in the
+paper, archived on Zenodo with a citable DOI:
+**[https://doi.org/10.5281/zenodo.21421426](https://doi.org/10.5281/zenodo.21421426)**.
 
 - v1 demo: `allele_frequency_count` — sum encrypted variant-presence vectors
   across ≥20 contributors, decrypt only the per-variant count.
@@ -22,12 +39,8 @@ program you can read before you run.
   [TenSEAL](https://github.com/OpenMined/TenSEAL) (Apache-2.0) — BFV with minimal
   additive-only params for exact-integer counts, depth-supporting BFV where a
   multiply is unavoidable, and CKKS only as a fast-follow approximate-real branch.
-  `blind` never chooses crypto params by hand.
-  See [`../docs/application_structure.md`](../docs/application_structure.md).
-- Requirements and simulation-mode design are the single source of truth:
-  [`../docs/requirements.md`](../docs/requirements.md) and
-  [`../docs/simulation_mode.md`](../docs/simulation_mode.md). This README does
-  not restate them.
+  `blind` never chooses crypto params by hand. The signed manifest, code, and
+  `env/uv.lock` are the application trust boundary.
 
 ---
 
@@ -69,10 +82,9 @@ column for it (see requirements: hard invariants).
    uv lock — TenSEAL/SEAL for the curated set) have their own versioning;
    the Rails platform should not carry them.
 
-It lives under `cli/` in the platform monorepo *during planning only*. It is
-built to be extracted verbatim into its own OSS repo (`blindmachine/blind-cli`)
-with its own README (this file), `pyproject.toml`, `tests/`, and `LICENSE`
-(MIT, permissive, no copyleft). Nothing here imports from the Rails app;
+The CLI is maintained in its own public repository,
+[`blindmachine/blind`](https://github.com/blindmachine/blind), with its own
+release workflow, tests, security policy, and MIT license. Nothing here imports from the Rails app;
 it talks to the platform exclusively over the documented HTTP API
 (see [`COMMANDS.md` → HTTP API contract](./COMMANDS.md#http-api-contract)).
 
@@ -87,10 +99,9 @@ sandboxed Python bundle whose signed payload lives under `signed/`
 `BENCHMARK.md`, and tests live beside `signed/` and are not part of the
 digest/signature. Its crypto library is a *locked
 application dependency*, not a capability `blind` provides. You never choose
-crypto params by hand — the bundle declares what it needs, and
-`uv --project env sync --frozen --no-dev` seals a pinned environment from inside
-`signed/` (see
-[`../docs/application_structure.md`](../docs/application_structure.md)).
+crypto params by hand. The bundle declares what it needs, and a data-free,
+digest-pinned container build runs `uv sync --frozen --no-dev`. The signed tree
+is mounted read-only and reverified afterward.
 
 v1's curated core applications all standardize on **TenSEAL BFV** (Apache-2.0);
 TenSEAL CKKS is reserved for the fast-follow approximate-real application.
@@ -108,9 +119,7 @@ works.** Reach for a multiply only when two values *no single party can see in
 plaintext* must be combined after encryption — the paper's thesis is the *cost of
 multiplicative depth within one library* (additive-only BFV vs multiply-capable
 BFV, with CKKS as a fast-follow branch). If a future application wants a different library (e.g. Paillier), that
-license and dep are isolated to that one bundle via its uv-locked environment. See the
-application catalog in [`../docs/requirements.md`](../docs/requirements.md) and
-`docs/paper/`.
+license and dependency are isolated to that bundle through its uv-locked environment.
 
 ---
 
@@ -118,18 +127,31 @@ application catalog in [`../docs/requirements.md`](../docs/requirements.md) and
 
 Requires **Python ≥ 3.11** and a **sandbox/container runtime** (`podman` or
 `docker`) — `blind` runs every application stage inside a pinned, network-isolated
-sealed environment, so a runtime must be present. Application crypto (TenSEAL for
+sealed environment with a read-only output directory and only its declared,
+size-bounded output files writable, so a runtime must be present. Application crypto (TenSEAL for
 the curated set) is **not** a `blind` dependency; each application's `env/uv.lock`
 fetches its own pinned deps at install time.
 
+Install the CLI as the `blind` command:
+
 ```bash
-# recommended: install the isolated CLI with pipx
-curl -fsSL https://blindmachine.org/install.sh | sh
-# or install directly
-pipx install blindmachine          # provides the `blind` command
-# or, inside a Python project
-uv add blindmachine
+uv tool install blindmachine
 ```
+
+`uv tool install` downloads the `blindmachine` package from PyPI, installs its
+exactly pinned runtime closure into an isolated environment, and puts two
+equivalent executables on your PATH: `blind` (the name every example in these
+docs uses) and `blindmachine`.
+
+To try it once without installing anything, run it in an ephemeral, cached
+environment instead — note that `uvx` alone puts nothing on your PATH:
+
+```bash
+uvx blindmachine
+```
+
+Nothing separate is published to "uvx": publishing `blindmachine` on PyPI makes
+both commands available.
 
 Then check your toolchain:
 
@@ -141,15 +163,15 @@ blind doctor          # verifies python, the sandbox runtime, the uv env-sealer,
 
 ### Runtime dependencies
 
-`typer` (dispatch) + `rich` (output) + `rich-click` (themed help), `httpx`
-(HTTP), `pydantic` v2 (manifest validation + the `--json` schema), `uv` (seals
-each application's pinned env from `env/uv.lock` → `env_lock`), `keyring` (OS
-keychain for the private-context reference), `cryptography` (verify Blind
-Machine's Ed25519 signature on application bundles), `platformdirs`, `pyyaml`. A
-container runtime (`podman`/`docker`) is required but external, not a Python dep.
-Application crypto (`tenseal`, …) is installed per-application from `env/uv.lock`,
-never by `blind`. Dev: `pytest`, `pytest-cov`, `ruff`, `mypy`. Full stack
-rationale + output design: **[`UX.md`](./UX.md)**.
+The runtime uses Typer/Rich for its command surface, HTTPX/Pydantic for the API
+contract, keyring for OS-backed secrets, and cryptography for pinned Ed25519
+verification. Every direct and transitive Python dependency is exact-pinned in
+wheel metadata because `uv tool install`/`uvx` do not consume this repository's `uv.lock`; the
+release gate proves that metadata and the lock export have the same runtime
+closure. A container runtime (`podman`/`docker`) is required but external.
+Application crypto is isolated per application and installed only from its
+signed `env/uv.lock`. See the
+[output design](https://github.com/blindmachine/blind/blob/main/UX.md).
 
 ---
 
@@ -179,19 +201,22 @@ blind certificates verify <cert-hash>                    # LOCAL: recompute + ch
 ### Data owner (no account)
 
 ```bash
-curl -fsSL https://blindmachine.org/install.sh | sh
 blind contributions create \
   --link https://blindmachine.org/c/AbC123... \
   --data ./my_vector.csv
 # encode → encrypt happen LOCALLY; only ciphertext is uploaded.
 # raw + encoded stay local; no secret key is generated here (uses the project's public context).
+# one-off, nothing installed: `uvx blindmachine contributions create ...` works too.
 ```
 
 Simulate feasibility before any real contributor exists (`simulate` is an alias
-for `simulations create`):
+for `simulations create`). Installed applications are addressed by their pinned
+`<name@digest>` (install prints the digest; `blind applications list` shows what
+is installed), so install the curated bundle first, then simulate it:
 
 ```bash
-blind simulate allele_frequency_count --synthetic --n 20,100,1000 --emit methods,table
+blind applications install allele_frequency_count          # verifies signature + digest, prints <name@digest>
+blind simulate allele_frequency_count@<digest> --synthetic --n 20,100,1000 --emit methods,table
 ```
 
 ---
@@ -215,7 +240,7 @@ separate.
 │       └── <project-id>/
 │           ├── public.context       # Public Crypto Context — SHAREABLE, uploaded to server
 │           ├── private.ref          # pointer to the OS-keychain entry (NOT the key itself)
-│           ├── private.key          # fallback ONLY if no keychain available  (chmod 600)
+│           ├── private.key          # explicit insecure file backend only (chmod 600)
 │           └── meta.yml             # crypto hint, params, pinned application name@digest, env_lock
 ├── applications/
 │   └── <name>@<sha256-digest>/      # content-addressed install; digest re-checked on every load
@@ -246,7 +271,7 @@ separate.
 ├── simulations/
 │   └── <sim-run-hash>/              # NON-authoritative SimulationRun: config.yml, equivalence.json,
 │                                    #   benchmark.{csv,md,tex}, plots/, methods.md, threat_model.md,
-│                                    #   provenance.json — see ../docs/simulation_mode.md §6
+│                                    #   provenance.json
 └── logs/
     └── blind.log                    # command + hash audit trail (no plaintext, no secrets)
 ```
@@ -304,9 +329,9 @@ local-only; Encrypted/Public are the only uploadable classes — is stated at ev
 step so a data owner can *see* the boundary, not just trust it.
 
 Honest scoping the CLI never overstates: the append-1 sentinel is an integrity
-check, **not** a MAC; verify-by-re-execution proves determinism on the same
-ciphertexts, **not** zero-knowledge; cohort-freeze + min-N mitigate but do not
-fully solve K-vs-K+1 differencing. See `../docs/requirements.md` (Non-goals).
+check, **not** a MAC; FHE hides contributor inputs from the server, **not**
+zero-knowledge; cohort-freeze + min-N mitigate but do not fully solve K-vs-K+1
+differencing.
 
 ---
 
@@ -315,7 +340,7 @@ fully solve K-vs-K+1 differencing. See `../docs/requirements.md` (Non-goals).
 Full Stripe-CLI-style resource/verb surface (CRUD verbs `create` · `retrieve` ·
 `update` · `list` · `delete` plus resource actions), per-command flags,
 LOCAL/REMOTE classification, `--json` output, and the HTTP API contract are in
-**[`COMMANDS.md`](./COMMANDS.md)**. Groups:
+the [command reference](https://github.com/blindmachine/blind/blob/main/COMMANDS.md). Groups:
 
 - Top-level: `login` · `logout` · `config` · `doctor` · `version` ·
   `resources` · `get`/`post` (raw API)
@@ -334,17 +359,18 @@ create`.)
 informative, inspired by the Rails command line** — aligned colored action
 labels, `rails routes`-grade tables, trees, timed progress bars, and the loud
 trust banners as panels. The full output design and the stack evaluation
-(including a serious look at `google/python-fire`) live in **[`UX.md`](./UX.md)**.
+(including a serious look at `google/python-fire`) live in the
+[output design](https://github.com/blindmachine/blind/blob/main/UX.md).
 
 Recommended stack: **typer** (typed dispatch; resource sub-apps map 1:1 to the
-Stripe surface; clean global `--json`) · **rich** + **rich-click** (all tables,
+Stripe surface; clean global `--json`) · **rich** (all tables,
 trees, panels, progress, themed help) · **httpx** (HTTP) · **pydantic** v2
 (models + the `--json` schema the desktop GUI consumes) · **uv** (seals each
 application's pinned env) · a **container runtime** (podman/docker) for the
 network-isolated sandbox · **keyring** · **cryptography** (Ed25519) ·
 **platformdirs** · **pyyaml**. We keep `python-fire`'s object model (resource
 classes *are* the CLI) but use Typer to dispatch, for typed input validation and
-a stable machine contract — rationale + tradeoffs in `UX.md`. `--json` is wired
+a stable machine contract. `--json` is wired
 at the framework level, so it is guaranteed on **every** command.
 
 ---
@@ -352,10 +378,10 @@ at the framework level, so it is guaranteed on **every** command.
 ## Development
 
 ```bash
-uv sync                 # install runtime + dev deps
-uv run pytest           # unit + golden-vector tests (application test_vectors/)
-uv run ruff check .     # lint
-uv run mypy blind       # types
+uv sync --locked                # install the reviewed runtime + dev closure
+uv run pytest                   # unit + golden-vector tests
+uv run ruff check src tests     # lint
+uv run python scripts/check_runtime_lock.py
 ```
 
 Key test suites: manifest/coordinate digest reproducibility, uv env-seal +
@@ -366,13 +392,14 @@ CKKS reals).
 
 ## License
 
-MIT. See [`LICENSE`](./LICENSE).
+MIT. See [LICENSE](https://github.com/blindmachine/blind/blob/main/LICENSE).
 
-## Source of truth
+## Source and security
 
-- Requirements: [`../docs/requirements.md`](../docs/requirements.md)
-- Simulation mode: [`../docs/simulation_mode.md`](../docs/simulation_mode.md)
-- Paper artifacts the CLI must produce: `../docs/paper/`
+- Source: [github.com/blindmachine/blind](https://github.com/blindmachine/blind)
+- Command contract: [COMMANDS.md](https://github.com/blindmachine/blind/blob/main/COMMANDS.md)
+- Vulnerability reporting and trust boundaries: [SECURITY.md](https://github.com/blindmachine/blind/blob/main/SECURITY.md)
 
-This README describes the CLI; it does not restate the requirements or the
-simulation-mode spec. When they disagree with this file, they win.
+PyPI releases are built from tags by GitHub Actions, published through PyPI
+Trusted Publishing, and include attestations. The build job has no OIDC publish
+permission; the isolated publish job only receives already-verified artifacts.

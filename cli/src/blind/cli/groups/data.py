@@ -61,9 +61,14 @@ def encrypt(c: typer.Context, project: str = typer.Option(..., "--project"),
 
     public_ctx = ctx.store.key_dir(project) / "public.context"
     if not public_ctx.exists():
-        data = ctx.client().get_public_context(project)
-        public_ctx.parent.mkdir(parents=True, exist_ok=True)
-        public_ctx.write_text(data.get("public_context", ""))
+        # Do NOT silently fetch a server-selected public context here: with no
+        # trust anchor that would bypass the RFC 0003 key-substitution defense (an
+        # untrusted server could hand back a context whose secret key IT holds).
+        # The verified context is obtained + pinned by the contribution flow.
+        raise UsageError(
+            f"No local public context for project {project}. Obtain it through the "
+            f"signed-invitation flow — `blind contribute <link>` pins the context to "
+            f"the owner's key — then retry `blind data encrypt`.")
 
     dest = Path(out) if out else ctx.store.home / "cache" / "encrypted" / f"{src.stem}.ct"
     artifact, sha = run_encrypt(bundle, src, public_ctx, dest)

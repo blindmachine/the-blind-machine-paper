@@ -25,7 +25,7 @@ model, and one renderer turns that model into these primitives (see Part D).
 | **Table** | `rails routes` | any `list`, any benchmark sweep, `doctor` |
 | **Tree** | — | hierarchy: project → contributions → jobs → result/certificate |
 | **Panel** | the boxed banners | the loud trust statements + final summaries |
-| **Progress + spinner** | migration timing | long ops: encrypt, upload, compute, re-execute, sweeps — always with elapsed time |
+| **Progress + spinner** | migration timing | long ops: encrypt, upload, compute, sweeps — always with elapsed time |
 
 ### Two orthogonal color channels
 
@@ -236,33 +236,7 @@ exits nonzero. In `--json`, the final `job_watch` view carries the full
 `rich.live.Live` spinner region is a pretty-mode refinement on top of the same
 polled stream.)
 
-### 4. `blind results verify` — verify-by-re-execution
-
-```
-$ blind results verify job_Q3z8 --local --inputs ./cohort/
-
-     compute  re-executing allele_frequency_count locally (21 ciphertexts, digest-sorted)
-
-     ✔ server digest      sha256:8f0c…2d
-     ✔ recomputed         sha256:8f0c…2d      identical
-
-  ╭─ Verified by re-execution ───────────────────────────────────────────────╮
-  │  Same ciphertexts in → same result digest out.                           │
-  │  This proves DETERMINISTIC recomputation, not zero-knowledge.            │
-  │  BFV integer results are bit-exact; CKKS reals are tolerance-bounded.    │
-  ╰───────────────────────────────────────────────────────────────────────────╯
-```
-*Styling:* the two digests print stacked and aligned so the eye lands on the
-match; both cyan, the `✔ identical` bold green (a mismatch prints both in red
-with `✗ MISMATCH` and a non-zero exit). The panel states the honest scope —
-`DETERMINISTIC` emphasized, `not zero-knowledge` plain — no overclaiming.
-`--local` requires `--inputs <dir>`: individual cohort ciphertexts are never
-served, so local re-execution is for synthetic or self-owned cohorts where the
-input files are already on disk. The default (no `--local`) asks the SERVER to
-re-execute (`POST /jobs/:id/reexecute`) and surfaces the run's `failure_reason`
-if the re-execution failed.
-
-### 5. `blind simulate` — sweep + emitted artifacts
+### 4. `blind simulate` — sweep + emitted artifacts
 
 ```
 $ blind simulate allele_frequency_count@sha256:4d1e…c0 \
@@ -316,7 +290,7 @@ still land and only the SVGs are skipped (with a `plots/README.md` note). A cell
 whose crypto params overflow / exhaust noise budget comes back
 `infeasible-at-params` — a first-class publishable result, never a crash.
 
-### 6. `blind doctor`
+### 5. `blind doctor`
 
 ```
 $ blind doctor
@@ -347,7 +321,7 @@ application-model reconciliation): `doctor` now proves the network-isolated runn
 exists and that the most-recently installed application's sealed env imports its own
 (application-supplied) crypto — `tenseal` is no longer a global CLI dependency.
 
-### 7. A `list` as a table — `blind applications list` (`rails routes` grade)
+### 6. A `list` as a table — `blind applications list` (`rails routes` grade)
 
 ```
 $ blind applications list
@@ -369,7 +343,7 @@ $ blind applications list
 display hint (tenseal BFV, additive vs multiplicative); digests cyan; the footer
 line dim. Every `list` command uses this same table renderer.
 
-### 8. A tree — `blind projects retrieve <id> --tree`
+### 7. A tree — `blind projects retrieve <id> --tree`
 
 The hierarchy the user asked to see (project → contributions → jobs →
 result/certificate) renders as a `rich.tree.Tree`:
@@ -522,7 +496,7 @@ drives **all five primitives**:
 - `rich.table.Table` → every `list` and the benchmark sweep (`rails routes` look).
 - `rich.tree.Tree` → the project → contributions → jobs → result hierarchy.
 - `rich.progress.Progress` (spinner + bar + `TimeElapsedColumn`) → encrypt,
-  upload, compute, re-execute, sweeps — timing for free.
+  upload, compute, sweeps — timing for free.
 - `rich.panel.Panel` → the loud trust banners and completion summaries.
 - `rich.text.Text` with theme styles → the aligned colored action lines.
 - `console.print_json()` / `Live` → the `--json` and streaming twins.
@@ -537,12 +511,11 @@ special code path.
 |---|---|---|
 | **typer** | CLI dispatch | Typed, poka-yoke flags; resource sub-apps map 1:1 to the Stripe surface; clean global `--json`; actively maintained. |
 | **rich** | Rendering | One themed Console drives every table, tree, panel, progress bar, and the aligned colored action labels. |
-| **rich-click** | Help theming | Renders Typer/Click `--help` through rich so help matches the rest of the output. |
 | **httpx** | HTTP | Modern sync client with timeouts, HTTP/2, pooling; talks to `/api/v1`; present maintainer (Encode). |
 | **pydantic v2** | Models / validation | Validates `manifest.yml` + API responses **and** defines the typed `--json` output schema the GUI consumes. |
 | **uv** | Env sealer + packaging | Builds the application's `env/uv.lock` environment → `env_lock`; also the project's own lock/dev tool. Astral, fast, active. |
-| **container runtime (podman/docker) via `subprocess`** | Sandbox | Runs `30_compute_encrypted.py` and local numbered stages `--network none` in the sealed env — shell out to the pinned runtime, no heavy SDK (Unix compose). |
-| **keyring** | Secrets | Stores the private-context *reference* in the OS keychain (macOS Keychain / GNOME Keyring / Windows Cred Mgr). |
+| **container runtime (podman/docker) via `subprocess`** | Sandbox | Runs every build and data-bearing stage in a digest-pinned runner; run phases have no network, a read-only root, no capabilities, and bounded resources. |
+| **keyring** | Secrets | Stores private key material in the OS keychain (macOS Keychain / GNOME Keyring / Windows Credential Manager) and fails closed if it is unavailable. |
 | **cryptography** (PyCA) | Signature verify | Verifies The Blind Machine's Ed25519 signature over each application bundle. |
 | **platformdirs** | Paths | OS-correct fallback locations for cache/logs around the spec-fixed `~/.blind`. |
 | **PyYAML** | Config / manifests | Reads `manifest.yml` and `config.yml` (swap to `ruamel.yaml` only if `config --set` must preserve comments). |
@@ -562,8 +535,6 @@ special code path.
   handle both. Add questionary only if a real selection menu appears (e.g.
   choosing among application versions).
 - **click directly** — used transitively *under* Typer; no reason to drop to it.
-- **rich-click as the framework** (vs library) — we use it only to theme help,
-  not to structure commands.
 
 ---
 
@@ -691,8 +662,7 @@ one code path, two audiences.
 
 - Command semantics + HTTP contract: [`COMMANDS.md`](./COMMANDS.md).
 - Trust surface + `~/.blind` layout: [`README.md`](./README.md).
-- Application bundle + two-phase sandbox model:
-  [`../docs/application_structure.md`](../docs/application_structure.md).
+- Application bundle + two-phase sandbox model: [`README.md`](./README.md).
 
 This file owns *how the CLI looks and what it's built from*; it does not restate
 what the commands mean. When they disagree, the docs above win.

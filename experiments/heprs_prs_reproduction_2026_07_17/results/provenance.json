@@ -1,0 +1,11 @@
+{
+  "study": "heprs_prs_reproduction_2026_07_17",
+  "reproduces": {
+    "paper": "Knight et al., Homomorphic encryption enables privacy preserving polygenic risk scores, Cell Reports Methods 2026",
+    "doi": "10.1016/j.crmeth.2025.101271",
+    "software": "https://github.com/gersteinlab/HEPRS"
+  },
+  "application": "polygenic_score_inference",
+  "data": "HEPRS public example_data/ (MIT-licensed synthetic HAPGEN2; see PROVENANCE.md). The real PsychENCODE schizophrenia genotypes are controlled-access and are NOT used.",
+  "security_bits": 128
+}

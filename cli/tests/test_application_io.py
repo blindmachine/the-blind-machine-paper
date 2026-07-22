@@ -8,17 +8,15 @@ adapter declared ``encrypt_outputs=2`` (→ ``run_encrypt_stage`` invokes
 ONE packed ``(g, y)`` blob via a single ``--out``. ``blind bench`` then recorded
 the 6th application ``infeasible-at-params`` while the whole suite stayed green.
 
-These tests load the REAL bundle and assert the adapter's declared output count
-is exactly what the shipped ``20_encrypt.py`` CLI requires — so this specific
-divergence can never regress silently again.
+These tests use a self-contained signed covariance-shaped bundle and assert the
+adapter's declared output count is exactly what the trusted stage shim requires,
+so this divergence cannot regress or disappear from standalone CI.
 """
 
 from __future__ import annotations
 
-import argparse
-import importlib.util
+import ast
 import shutil
-import sys
 
 from blind.runtime.compute import run_encrypt_stage
 from blind.runtime.application_io import application_io_for
@@ -26,50 +24,21 @@ from blind.runtime.bundle import load_bundle
 from blind.runtime.shims import materialize
 
 
-class _ParserGrabbed(Exception):
-    pass
-
-
 def _encrypt_stage_option_strings(bundle) -> set[str]:
     """Return the set of CLI option strings the bundle's ``20_encrypt.py``
-    declares — introspected from its actual ``argparse`` parser (robust to
-    argument renames), not scraped from source."""
+    declares without importing application-controlled Python into the host."""
     stage_path = bundle.stage_file("encrypt")
-    spec = importlib.util.spec_from_file_location("cov_encrypt_stage", stage_path)
-    module = importlib.util.module_from_spec(spec)
-
-    # The stage file is a thin kit shim that imports its pure function from a
-    # sibling author module (local_data_owner.py). Loading it IN-PROCESS therefore
-    # needs the bundle root on sys.path — exactly what `python 20_encrypt.py` from
-    # the bundle root (how the worker/CLI actually run it) gets for free.
-    bundle_root = str(stage_path.parent)
-    sys.path.insert(0, bundle_root)
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        if bundle_root in sys.path:
-            sys.path.remove(bundle_root)
-        sys.modules.pop("local_data_owner", None)
-
-    captured: dict[str, argparse.ArgumentParser] = {}
-    original = argparse.ArgumentParser.parse_args
-
-    def _grab(self, *args, **kwargs):  # noqa: ANN001
-        captured["parser"] = self
-        raise _ParserGrabbed
-
-    argparse.ArgumentParser.parse_args = _grab  # type: ignore[assignment]
-    try:
-        module.main([])
-    except _ParserGrabbed:
-        pass
-    finally:
-        argparse.ArgumentParser.parse_args = original  # type: ignore[assignment]
-
-    parser = captured["parser"]
+    tree = ast.parse(stage_path.read_text(encoding="utf-8"), filename=str(stage_path))
     options: set[str] = set()
-    for action in parser._actions:  # noqa: SLF001 — introspection is the point
-        options.update(action.option_strings)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute) or node.func.attr != "add_argument":
+            continue
+        for argument in node.args:
+            if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                if argument.value.startswith("-"):
+                    options.add(argument.value)
     return options
 
 

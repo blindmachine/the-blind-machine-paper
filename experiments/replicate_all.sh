@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# replicate_all.sh — ONE command to run EVERY paper experiment (E1-E8) and print a
-# single PASS / SKIP / FAIL table. This is the artifact an independent reviewer or
-# AI agent runs to reproduce the whole paper from a clean clone.
+# replicate_all.sh — THE canonical entrypoint: ONE command to run EVERY paper
+# experiment (E1-E10) and print a single PASS / SKIP / FAIL table. This is the
+# artifact an independent reviewer or AI agent runs to reproduce the whole paper
+# from a clean clone. (run_all.sh is the narrower E1-E4 synthetic-core harness that
+# this script drives as its first stage — use replicate_all.sh for the full paper.)
 #
-#   bash replicate_all.sh          # full: E1-E4 synthetic (incl. the E2/E3 sweeps) + E5-E8
-#   bash replicate_all.sh fast     # E1+E4 synthetic core + E5-E8 (skips the longer E2/E3 sweeps)
+#   bash replicate_all.sh          # full: E1-E4 synthetic (incl. the E2/E3 sweeps) + E5-E10
+#   bash replicate_all.sh fast     # E1+E4 synthetic core + E5-E10 (skips the longer E2/E3 sweeps)
 #
-#   E1-E4  synthetic BFV taxonomy / security matrix / feasibility / differencing —
-#          offline, deterministic; these MUST PASS.
-#   E5-E8  public-genome studies — need bcftools + network; they SKIP cleanly
-#          (not FAIL) when a prerequisite is missing.
+#   E1-E4   synthetic BFV taxonomy / security matrix / feasibility / differencing —
+#           offline, deterministic; these MUST PASS.
+#   E5-E8   public-genome studies — need bcftools + network; they SKIP cleanly
+#           (not FAIL) when a prerequisite is missing.
+#   E9-E10  published-study reproductions (HEPRS PRS; Blatt et al. PNAS 2020
+#           chi-square GWAS + its covariate-adjusted/LRA companion) — need the
+#           signed bundle + TenSEAL; they SKIP cleanly when a prerequisite is missing.
 #
 # Exit status is non-zero ONLY if a deterministic experiment produced a WRONG result.
 # SKIPs (no bcftools, no network, an unsealed env, an absent draft bundle) are not
@@ -21,7 +26,7 @@ NAMES=(); STATUS=()
 record() { NAMES+=("$1"); STATUS+=("$2"); }
 
 echo "======================================================================"
-echo " The Blind Machine — full paper replication (E1-E8), mode: $MODE"
+echo " The Blind Machine — full paper replication (E1-E10), mode: $MODE"
 echo " apps: $APPS_DIR"
 echo " cli : $CLI_DIR"
 echo "======================================================================"
@@ -62,6 +67,8 @@ run_study "E5 real human DNA (IGSR)"     "e5_real_human_dna_igsr.sh"
 run_study "E6 public AF / FST panel"     "e6_public_af_fst_panel.sh"
 run_study "E7 beacon release policy"     "e7_beacon_release_policy.sh"
 run_study "E8 public LD window (draft)"  "e8_public_ld_window.sh"
+run_study "E9 HEPRS PRS reproduction"    "e9_heprs_prs_reproduction.sh"
+run_study "E10 GWAS chi-square (Blatt PNAS 2020) + covariate-adjusted (LRA)" "e10_gwas_chi_square.sh"
 
 # (Regenerate the appendix tables/figures afterwards with:
 #   python3 summarize_public_real_dna.py )

@@ -10,11 +10,12 @@ check with a fix hint.
 from __future__ import annotations
 
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass
 
 from blind.hashing import bundle_payload_root
+from blind.runtime.sandbox import ContainerSandbox
 from blind.store import Store
 
 
@@ -42,16 +43,19 @@ def _python_check() -> DoctorCheck:
 
 
 def _sandbox_check() -> DoctorCheck:
-    for runtime in ("podman", "docker"):
-        path = shutil.which(runtime)
-        if path:
-            ver = _cmd_version([runtime, "--version"])
-            return DoctorCheck("sandbox runtime", True, f"{runtime} {ver}",
-                               "rootless · --network none ok")
-    return DoctorCheck(
-        "sandbox runtime", False, "not found", "needs podman or docker on PATH",
-        fix="brew install podman && podman machine init",
-    )
+    try:
+        sandbox = ContainerSandbox()
+        sandbox.ensure_ready(pull=False)
+        ver = _cmd_version([sandbox.runtime, "--version"])
+        return DoctorCheck(
+            "sandbox runtime", True, f"{sandbox.runtime_name} {ver}",
+            f"daemon ok · digest-pinned image present · {sandbox.image}",
+        )
+    except Exception as exc:
+        return DoctorCheck(
+            "sandbox runtime", False, "unavailable", str(exc)[:120],
+            fix="install/start rootless Podman or Docker, then reinstall an application online",
+        )
 
 
 def _uv_check() -> DoctorCheck:
@@ -66,9 +70,12 @@ def _uv_check() -> DoctorCheck:
 def _keychain_check() -> DoctorCheck:
     import os
 
-    if os.environ.get("BLIND_NO_KEYRING"):
-        return DoctorCheck("OS keychain", True, "disabled",
-                           "BLIND_NO_KEYRING set · file fallback in use")
+    if os.environ.get("BLIND_SECRET_BACKEND", "keyring").strip().lower() == "file":
+        return DoctorCheck(
+            "OS keychain", False, "explicitly disabled",
+            "BLIND_SECRET_BACKEND=file stores private keys as plaintext 0600 files",
+            fix="unset BLIND_SECRET_BACKEND and repair the OS keychain",
+        )
     try:
         import keyring
 
@@ -82,7 +89,7 @@ def _keychain_check() -> DoctorCheck:
                            "read/write round-trip ok" if ok else "round-trip failed")
     except Exception as exc:
         return DoctorCheck("OS keychain", False, "unavailable", str(exc)[:60],
-                           fix="secret keys will use a 0600 fallback file")
+                           fix="repair/unlock the OS keychain; private-key operations fail closed")
 
 
 def _crypto_check() -> DoctorCheck:
@@ -164,7 +171,10 @@ def _cmd_version(cmd: list[str]) -> str:
     import re
 
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        # Callers pass fixed diagnostic tool/version argv and no shell.
+        out = subprocess.run(  # nosec B603
+            cmd, capture_output=True, text=True, timeout=5
+        )
         text = (out.stdout or out.stderr).strip()
         # First token that looks like a version number (e.g. 0.8.22, 28.1.0).
         m = re.search(r"\d+\.\d+(?:\.\d+)?", text)

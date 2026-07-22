@@ -9,6 +9,7 @@ import typer
 from blind import benchmark as bench
 from blind import console
 from blind.context import Context, emit
+from blind.errors import VerificationError
 from blind.hashing import short
 from blind.simulate import (
     CohortSpec,
@@ -218,6 +219,24 @@ def create(
         ], kind="info")
 
     emit(ctx, view, render)
+    # The oracle==encrypted equivalence is the whole point of a simulation; a
+    # MISMATCH must set a nonzero exit code so the paper harness / CI can gate on
+    # it (the render only prints "✗ MISMATCH"). The differencing attack demo is a
+    # demonstration of leakage, not an equivalence check, so it never gates.
+    if not _simulation_passed(view):
+        raise typer.Exit(code=VerificationError.code)
+
+
+def _simulation_passed(view: dict) -> bool:
+    if view.get("object") == "attack_demo":
+        return True
+    mode = view.get("mode")
+    if mode in ("sweep", "from-local", "against-result"):
+        return bool(view.get("equivalence", {}).get("passed", False))
+    runs = view.get("runs")
+    if runs:  # default N-loop: every run must be bit-exact / within tolerance
+        return all(r.get("equivalence", {}).get("passed", False) for r in runs)
+    return True  # replay / metadata-only modes carry no equivalence to gate
 
 
 @app.command("list")

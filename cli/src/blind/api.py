@@ -20,6 +20,8 @@ from blind.errors import AuthError, NetworkError, PreconditionError, Verificatio
 from blind.hashing import normalize_digest
 
 API_VERSION = "v1"
+MAX_BUNDLE_DOWNLOAD_BYTES = 32 * 1024 * 1024
+MAX_SIGNATURE_DOWNLOAD_BYTES = 256
 
 
 class ApiClient:
@@ -58,7 +60,7 @@ class ApiClient:
     ) -> Any:
         url = self._api_path(path)
         if auth_required and not (token or self.token):
-            raise AuthError("Not logged in. Run `blind login` or pass --api-key.")
+            raise AuthError("Not logged in. Run `blind login` or use --api-key-stdin.")
         try:
             resp = self._client.request(
                 method, url, json=json, params=params, headers=self._headers(token)
@@ -71,7 +73,7 @@ class ApiClient:
         """Authenticated request returning the raw response (non-JSON bodies:
         NDJSON stage streams, plain-text logs). Errors map exactly like request()."""
         if not self.token:
-            raise AuthError("Not logged in. Run `blind login` or pass --api-key.")
+            raise AuthError("Not logged in. Run `blind login` or use a private API-key source.")
         try:
             resp = self._client.request(method, self._api_path(path), headers=self._headers())
         except httpx.HTTPError as exc:
@@ -97,7 +99,7 @@ class ApiClient:
         ``resp.content`` + the ``X-*-Digest`` header. Errors map like request()."""
         url = self._api_path(path)
         if auth_required and not (token or self.token):
-            raise AuthError("Not logged in. Run `blind login` or pass --api-key.")
+            raise AuthError("Not logged in. Run `blind login` or use a private API-key source.")
         headers = self._headers(token)
         if content is not None:
             headers["Content-Type"] = "application/octet-stream"
@@ -166,14 +168,31 @@ class ApiClient:
         return self.post("auth/device", json={}, auth_required=False)
 
     def exchange_token(
-        self, *, device_code: str | None = None, api_key: str | None = None
+        self,
+        *,
+        device_code: str | None = None,
+        api_key: str | None = None,
+        email: str | None = None,
+        password: str | None = None,
     ) -> dict:
         payload: dict = {}
         if device_code:
             payload["device_code"] = device_code
         if api_key:
             payload["api_key"] = api_key
+        if email:
+            payload["email_address"] = email
+        if password:
+            payload["password"] = password
         return self.post("auth/token", json=payload, auth_required=False)
+
+    def register(self, *, email: str, password: str) -> dict:
+        """Create an account (`blind register`) and return { access_token, account }."""
+        return self.post(
+            "auth/registration",
+            json={"email_address": email, "password": password, "password_confirmation": password},
+            auth_required=False,
+        )
 
     def me(self, token: str | None = None) -> dict:
         return self.get("me", token=token)
@@ -193,25 +212,45 @@ class ApiClient:
     def retrieve_application_version(self, name: str, digest: str) -> dict:
         return self.get(f"applications/{name}/versions/{digest}", auth_required=False)
 
+    def _download_limited(self, url: str, *, max_bytes: int, label: str) -> bytes:
+        headers = {"Accept": "application/octet-stream", "Accept-Encoding": "identity"}
+        try:
+            with self._client.stream("GET", url, headers=headers) as resp:
+                if not resp.is_success:
+                    raise NetworkError(f"{label} download failed: HTTP {resp.status_code}")
+                encoding = resp.headers.get("content-encoding", "identity").lower()
+                if encoding not in {"", "identity"}:
+                    raise VerificationError(f"Refusing encoded {label} response")
+                declared = resp.headers.get("content-length")
+                if declared:
+                    try:
+                        if int(declared) < 0 or int(declared) > max_bytes:
+                            raise VerificationError(f"{label} download exceeds the size limit")
+                    except ValueError as exc:
+                        raise VerificationError(f"{label} response has an invalid Content-Length") from exc
+                payload = bytearray()
+                chunks = [resp.content] if resp.is_stream_consumed else resp.iter_raw()
+                for chunk in chunks:
+                    if len(payload) + len(chunk) > max_bytes:
+                        raise VerificationError(f"{label} download exceeds the size limit")
+                    payload.extend(chunk)
+                return bytes(payload)
+        except (NetworkError, VerificationError):
+            raise
+        except httpx.HTTPError as exc:
+            raise NetworkError(f"Could not download {label.lower()}: {exc}") from exc
+
     def download_bundle(self, name: str, digest: str) -> bytes:
         url = self._api_path(f"applications/{name}/versions/{digest}/bundle")
-        try:
-            resp = self._client.get(url)
-        except httpx.HTTPError as exc:
-            raise NetworkError(f"Could not download bundle: {exc}") from exc
-        if not resp.is_success:
-            raise NetworkError(f"Bundle download failed: HTTP {resp.status_code}")
-        return resp.content
+        return self._download_limited(
+            url, max_bytes=MAX_BUNDLE_DOWNLOAD_BYTES, label="Bundle"
+        )
 
     def download_signature(self, name: str, digest: str) -> bytes:
         url = self._api_path(f"applications/{name}/versions/{digest}/signature")
-        try:
-            resp = self._client.get(url)
-        except httpx.HTTPError as exc:
-            raise NetworkError(f"Could not download signature: {exc}") from exc
-        if not resp.is_success:
-            raise NetworkError(f"Signature download failed: HTTP {resp.status_code}")
-        return resp.content
+        return self._download_limited(
+            url, max_bytes=MAX_SIGNATURE_DOWNLOAD_BYTES, label="Signature"
+        )
 
     # Projects -------------------------------------------------------------
     def create_project(self, **fields) -> dict:
@@ -239,6 +278,15 @@ class ApiClient:
     def project_events(self, project_id: str, since: str | None = None) -> dict:
         params = {"since": since} if since else None
         return self.get(f"projects/{project_id}/events", params=params)
+
+    def put_owner_key(self, project_id: str, owner_signing_pubkey: str) -> dict:
+        """Register the project owner's PUBLIC Ed25519 signing key (RFC 0003). Only
+        the public half is sent — the private key never leaves the machine, and the
+        server never verifies with it (the contributor does, against the link key)."""
+        return self.put(
+            f"projects/{project_id}/owner_key",
+            json={"owner_signing_pubkey": owner_signing_pubkey},
+        )
 
     # Keys (public context only — no secret endpoint exists) ---------------
     def put_public_context(self, project_id: str, public_context_sha256: str, data) -> dict:
@@ -312,8 +360,8 @@ class ApiClient:
     def job_events(self, job_id: str) -> dict:
         """GET the job stage stream. The server emits NDJSON (one JSON object per
         line: lifecycle queued/running/completed/failed lines interleaved with
-        fine worker stages). Parsed tolerantly: malformed lines are skipped,
-        unknown keys are kept. Plain-JSON bodies (older servers / mocks) are
+        fine worker stages). Malformed lines are refused so a corrupted/hostile
+        stream cannot hide a failure transition. Plain-JSON bodies (older servers / mocks) are
         accepted too. Returns ``{"events": [...]}``."""
         resp = self._raw("GET", f"jobs/{job_id}/events")
         try:
@@ -331,10 +379,11 @@ class ApiClient:
                 continue
             try:
                 event = _json.loads(line)
-            except Exception:
-                continue  # tolerate malformed lines
-            if isinstance(event, dict):
-                events.append(event)
+            except _json.JSONDecodeError as exc:
+                raise VerificationError("Malformed JSON in job event stream") from exc
+            if not isinstance(event, dict):
+                raise VerificationError("Job event stream entries must be JSON objects")
+            events.append(event)
         return {"events": events}
 
     def job_logs(self, job_id: str) -> dict:
@@ -356,13 +405,18 @@ class ApiClient:
         """Download the Encrypted result. The server streams raw octet-stream
         bytes + an ``X-Result-Digest`` header — not JSON."""
         resp = self._raw_body("GET", f"jobs/{job_id}/result")
+        digest = resp.headers.get("X-Result-Digest", "")
+        # Fail closed by construction: an honest server ALWAYS sets this integrity
+        # header (jobs_controller#result), so an absent/empty one is a hostile or
+        # tampering middlebox — never return unverifiable bytes to a caller (belt to
+        # each caller's digest-match brace via hashing.require_result_digest).
+        if not normalize_digest(digest):
+            raise VerificationError(
+                "Result response is missing the X-Result-Digest integrity header")
         return {
             "ciphertext_bytes": resp.content,
-            "result_digest": resp.headers.get("X-Result-Digest", ""),
+            "result_digest": digest,
         }
-
-    def reexecute_job(self, job_id: str) -> dict:
-        return self.post(f"jobs/{job_id}/reexecute", json={})
 
     def list_certificates(self, project_id: str) -> dict:
         return self.get(f"projects/{project_id}/certificates")

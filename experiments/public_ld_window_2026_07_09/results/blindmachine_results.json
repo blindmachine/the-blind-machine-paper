@@ -4,9 +4,9 @@
     "ciphertext_bytes_per_sample": 2621791.0,
     "ciphertext_bytes_total": 65544775,
     "public_context_bytes": 9438280,
-    "public_context_sha256": "sha256:02ef22ce17cb2eb5d49fafafc87be6f256418b302fb7248726d5e5f3d3ea0b21",
+    "public_context_sha256": "sha256:0522a3a823bd5282b6391e86d66cdef783a9b4ba7d866f429946723835820cec",
     "result_bytes": 6554490,
-    "result_sha256": "sha256:f0c0af3c22154cdc151af8c4f3fe2a3e21911179eb13a16b9dd3b4fbe3a45b73"
+    "result_sha256": "sha256:ebc7d5c8ecd0fdc81042ab0ea960852d2b0199372b54f6d10a943ddafef420e7"
   },
   "decoded": {
     "covariance": [
@@ -287,12 +287,12 @@
     ]
   },
   "timings_ms": {
-    "compute_ms": 1824.5695420046104,
-    "decode_ms": 0.03904199547832832,
-    "decrypt_ms": 69.2305420016055,
-    "encode_ms": 0.11066699516959488,
-    "encrypt_ms": 1233.705958002247,
-    "keygen_ms": 277.54462500161026,
-    "total_ms": 3405.200376000721
+    "compute_ms": 1857.8822090057656,
+    "decode_ms": 0.037458958104252815,
+    "decrypt_ms": 64.06250002328306,
+    "encode_ms": 0.15579198952764273,
+    "encrypt_ms": 1260.0818750215694,
+    "keygen_ms": 229.37945800367743,
+    "total_ms": 3411.5992930019274
   }
 }

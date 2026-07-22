@@ -5,8 +5,8 @@
   ],
   "base_n": 24,
   "blindmachine_results": {
-    "base_result_sha256": "sha256:143f18dacf32ae7e75213d9fd130b1d23803bb845b724c2b5e40232daa29711b",
-    "included_result_sha256": "sha256:c4608568bd483c598abc422beca5ad6036c0797e38dac5bce80de1339fbead55"
+    "base_result_sha256": "sha256:019ab597fe514dea589f0196644f6fe0919e350d8e8fa84ee9ff1093c0f65e9f",
+    "included_result_sha256": "sha256:5436ec41939a87c3a69a41892d466b8f7d7479e44465d9bfb8ff7ca41655b4ae"
   },
   "included_n": 25,
   "privacy_boundary": {

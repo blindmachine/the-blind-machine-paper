@@ -9,6 +9,7 @@ import pytest
 
 from blind.errors import UsageError, VerificationError
 from blind.runtime import bundle as bundle_mod
+from blind.workspace import installed_bundle
 
 
 def test_load_bundle_and_digest(make_bundle):
@@ -85,6 +86,13 @@ def test_active_signing_key_defaults_to_pinned(monkeypatch):
     assert len(bundle_mod._PINNED_SIGNING_KEY_HEX) == 64
 
 
+def test_custom_signing_key_requires_separate_unsafe_opt_in(make_bundle, monkeypatch):
+    src, _ = make_bundle(sign=True)
+    monkeypatch.delenv("BLIND_UNSAFE_ALLOW_CUSTOM_SIGNING_KEY", raising=False)
+    with pytest.raises(VerificationError):
+        bundle_mod.verify_signature(src)
+
+
 def test_extract_bundle_rejects_path_traversal(tmp_path):
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
@@ -94,6 +102,41 @@ def test_extract_bundle_rejects_path_traversal(tmp_path):
         tf.addfile(info, io.BytesIO(data))
     with pytest.raises(VerificationError):
         bundle_mod.extract_bundle(buf.getvalue(), tmp_path / "dest")
+
+
+def test_extract_bundle_rejects_windows_backslash_traversal(tmp_path):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tf:
+        info = tarfile.TarInfo(r"..\escape.txt")
+        info.size = 4
+        tf.addfile(info, io.BytesIO(b"nope"))
+    with pytest.raises(VerificationError):
+        bundle_mod.extract_bundle(buf.getvalue(), tmp_path / "dest")
+
+
+def test_downloaded_bundle_rejects_preseeded_unsigned_venv(make_bundle):
+    src, _ = make_bundle()
+    poisoned = src / "signed" / "env" / ".venv" / "lib" / "python" / "site-packages"
+    poisoned.mkdir(parents=True)
+    (poisoned / "shadow.py").write_text("raise RuntimeError('poisoned')\n")
+    with pytest.raises(VerificationError):
+        bundle_mod.verify_download_structure(src)
+
+
+def test_installed_bundle_rejects_unsigned_shadow_bytecode(installed):
+    store, bundle, application_id = installed
+    shadow = bundle.root / "__pycache__"
+    shadow.mkdir()
+    (shadow / "server.cpython-311.pyc").write_bytes(b"unsigned")
+    with pytest.raises(VerificationError):
+        installed_bundle(store, application_id)
+
+
+def test_installed_bundle_rejects_tampered_signed_source(installed):
+    store, bundle, application_id = installed
+    (bundle.root / "10_encode.py").write_text("raise RuntimeError('tampered')\n")
+    with pytest.raises(VerificationError):
+        installed_bundle(store, application_id)
 
 
 def test_extract_bundle_roundtrip(make_bundle, tmp_path):
@@ -109,3 +152,16 @@ def test_extract_bundle_roundtrip(make_bundle, tmp_path):
     assert (dest / "README.md").exists()
     assert (dest / "SECURITY.md").exists()
     assert (dest / "tests" / "vectors" / "v1.json").exists()
+
+
+def test_extract_bundle_preserves_signed_top_level(make_bundle, tmp_path):
+    src, _ = make_bundle()
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tf:
+        tf.add(src / "signed", arcname="signed")
+
+    dest = tmp_path / "unpacked"
+    bundle_mod.extract_bundle(buf.getvalue(), dest)
+
+    assert (dest / "signed" / "manifest.yml").exists()
+    assert not (dest / "manifest.yml").exists()

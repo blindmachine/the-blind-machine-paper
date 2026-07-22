@@ -14,7 +14,7 @@ fetch authentic bytes straight from the authoritative public source.
 - **This repo** (replication): https://github.com/blindmachine/the-blind-machine-paper
 - **Paper text**: https://blindmachine.org/papers/the-blind-machine
 
-Snapshot assembled: 2026-07-11T07:18:17Z
+Snapshot assembled: 2026-07-22T01:47:54Z
 
 ---
 
@@ -22,33 +22,37 @@ Snapshot assembled: 2026-07-11T07:18:17Z
 
 | Tier | What it proves | Needs |
 |------|----------------|-------|
-| **Tier 1 — smoke** | the open CLI installs a signed application, seals an env, simulates a run, verifies by re-execution | just the `blind` CLI (the tool repo above) |
-| **Tier 2 — full E1–E8** | the paper's tables, end to end | this repo + `uv` + `python3` (the `blind` CLI is **vendored** at `./cli` — no separate clone); E5–E8 additionally need `curl`, `bcftools`, `tabix` |
+| **Tier 1 — smoke** | the open CLI installs a signed application, verifies its digest + Ed25519 signature, seals an env, and reproduces a deterministic synthetic simulation (bit-identical to the cleartext oracle) | just the `blind` CLI (the tool repo above) |
+| **Tier 2 — full E1–E10** | the paper's tables, end to end | this repo + `uv` + `python3` (the `blind` CLI is **vendored** at `./cli` — no separate clone); E5–E8 additionally need `curl`, `bcftools`, `tabix` |
 
-Tier 2 is what this package delivers, and it is **self-contained**: the six signed
+Tier 2 is what this package delivers, and it is **self-contained**: the 9 signed
 bundles and the `blind` CLI are vendored, so E1–E4 clone-and-run with **zero**
 dependency on any hosted service. E1–E4 are fully deterministic (synthetic cohorts,
 seeded, no network). E5–E8 are **aggregate-reproducible** from public IGSR 1000
 Genomes data via `fetch_public_data.sh` — no human genotypes are shipped here — and
-**SKIP cleanly** when `bcftools`/network is unavailable.
+**SKIP cleanly** when `bcftools`/network is unavailable. E9–E10 reproduce two
+published FHE-genomics studies (HEPRS polygenic scores; Blatt et al. PNAS 2020
+chi-square GWAS plus its covariate-adjusted companion) and **SKIP cleanly** when the
+signed bundle or the TenSEAL runtime is unavailable.
 
 ---
 
 ## One-command replication
 
 ```bash
-# 1. Clone and pin to the paper's tag (replace <tag> with the release tag)
+# 1. Clone and pin to the paper's release tag
 git clone https://github.com/blindmachine/the-blind-machine-paper
 cd the-blind-machine-paper
-git checkout <tag>
+git checkout v2026.07.18
 
-# 2. Run EVERY experiment (E1–E8) and print one PASS / SKIP / FAIL table
-bash experiments/replicate_all.sh          # full E1–E8
+# 2. Run EVERY experiment (E1–E10) and print one PASS / SKIP / FAIL table
+bash experiments/replicate_all.sh          # full E1–E10
 bash experiments/replicate_all.sh fast     # skip the longer E2/E3 sweeps
 ```
 
 `replicate_all.sh` seals the app envs, runs the synthetic harness (E1–E4), fetches
-the bounded public genome slices, runs the real-DNA studies (E5–E8), and prints one
+the bounded public genome slices, runs the real-DNA studies (E5–E8) and the
+published-study reproductions (E9–E10), and prints one
 summary table. It exits non-zero **only** if a deterministic experiment produced a
 wrong result. The E5–E8 studies **SKIP cleanly** (not FAIL) when a prerequisite is
 missing (no `bcftools`/`tabix`, no network, or the draft E8 bundle). The studies run
@@ -86,20 +90,23 @@ the-blind-machine-paper/
   README.md            # this file
   LICENSE              # MIT
   cli/                 # the vendored open `blind` CLI (so run_all/replicate_all are self-contained)
-  applications/        # the 6 signed bundles (Ed25519, content-addressed) + the draft genotype_pair_ld (E8)
+  applications/        # the 9 signed bundles (Ed25519, content-addressed) + the draft genotype_pair_ld (E8)
   experiments/         # e1..e8, run_all.sh, replicate_all.sh, verify.py, lib.sh, fetch_public_data.sh, DATA_SOURCES.md
   MANIFEST.sha256      # sha256 of every file in this snapshot
 ```
 
 ### Applications
 
-The 6 curated BFV applications the experiments run against, each a
+The 9 curated BFV applications the experiments run against, each a
 signed bundle (`.blind-signature` + `signed/`):
 
 - `allele_frequency_count`
 - `carrier_count`
 - `cohort_histogram`
 - `polygenic_score_aggregate`
+- `polygenic_score_inference`
+- `gwas_chi_square`
+- `gwas_covariate_adjusted`
 - `allele_frequency_with_variance`
 - `genotype_phenotype_covariance`
 

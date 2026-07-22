@@ -1,0 +1,32 @@
+{
+  "example": {
+    "dataset": "HEPRS public example (10,000 SNP x 50 individuals, synthetic HAPGEN2)",
+    "snps": 10001,
+    "samples": 50,
+    "weight_scale": 1000000,
+    "encrypted_equals_plaintext_oracle_exact": true,
+    "pearson_r_vs_heprs_pred": 0.9999999992013955,
+    "affine_slope_vs_heprs_pred": 0.9999997081645997,
+    "affine_intercept_vs_heprs_pred": 0.26158737910291185,
+    "max_residual_after_intercept": 3.643851184429586e-05,
+    "wall_seconds": 5.083947125007398,
+    "peak_rss_mb": 415.154176
+  },
+  "scaling": [
+    {
+      "snps": 10000,
+      "samples": 20,
+      "exact": true,
+      "wall_seconds": 2.091762874973938,
+      "ms_per_individual": 104.5881437486969
+    },
+    {
+      "snps": 50000,
+      "samples": 20,
+      "exact": true,
+      "wall_seconds": 3.328613082994707,
+      "ms_per_individual": 166.43065414973535
+    }
+  ],
+  "pass": true
+}

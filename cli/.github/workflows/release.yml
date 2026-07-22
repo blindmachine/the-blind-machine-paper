@@ -1,0 +1,73 @@
+name: Release to PyPI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+    with:
+      release: true
+    permissions:
+      contents: read
+
+  tag:
+    name: Verify immutable release tag
+    if: github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: pypi
+    permissions:
+      contents: read
+    outputs:
+      name: ${{ steps.release-tag.outputs.name }}
+    steps:
+      - name: Check out the verified main revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify the exact version tag
+        id: release-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          test "$GITHUB_REF" = "refs/heads/main"
+          tag="$(python3 scripts/check_release_tag.py --allow-main --print-tag)"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" = "$GITHUB_SHA"
+          printf 'name=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish verified artifacts
+    needs: [verify, tag]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/blindmachine/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download verified distributions only
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: distributions
+          path: dist
+      - name: Publish with PyPI Trusted Publishing and attestations
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          packages-dir: dist/
+          attestations: true
+          print-hash: true
+          verbose: true

@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import os
 import platform
-import subprocess
+import subprocess  # nosec B404
 from pathlib import Path
 
 RUN_DATE_ENV = "BLIND_BENCH_RUN_DATE"
@@ -36,7 +36,8 @@ RUN_DATE_ENV = "BLIND_BENCH_RUN_DATE"
 
 def _run(cmd: list[str], *, cwd: str | None = None, timeout: int = 10) -> str | None:
     try:
-        out = subprocess.run(
+        # argv comes only from the fixed, read-only provenance probes below.
+        out = subprocess.run(  # nosec B603
             cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd
         )
     except Exception:
@@ -59,8 +60,8 @@ def cpu_model() -> str | None:
             for line in Path("/proc/cpuinfo").read_text().splitlines():
                 if line.lower().startswith("model name"):
                     return line.split(":", 1)[1].strip()
-        except Exception:
-            pass
+        except OSError:
+            return platform.processor() or platform.machine() or None
     return platform.processor() or platform.machine() or None
 
 

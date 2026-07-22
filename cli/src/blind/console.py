@@ -40,9 +40,10 @@ BLIND_THEME = Theme(
         "verb.emitted": "green",
         "verb.error": "bold red",
         "verb.local": "dim",
-        # Channel 2 — trust classes (artifact tags)
-        "trust.raw": "bold red",
-        "trust.private": "bold red",
+        # Channel 2 — trust classes (artifact tags). LOCAL-ONLY = caution (yellow/
+        # amber "hold"), NOT danger — red is reserved for a real ✗ mismatch/error.
+        "trust.raw": "yellow",
+        "trust.private": "yellow",
         "trust.encoded": "yellow",
         "trust.encrypted": "green",
         "trust.public": "blue",
@@ -53,7 +54,7 @@ BLIND_THEME = Theme(
         "warn": "yellow",
         "bad": "bold red",
         "est": "yellow",
-        "panel.trust": "bold red",
+        "panel.trust": "yellow",
         "panel.done": "green",
         "panel.info": "blue",
     }
@@ -212,7 +213,7 @@ def panel(title: str, rows: list[tuple[str, str]] | str, kind: str = "done") -> 
 
 
 def trust_banner(title: str, message: str) -> None:
-    """The loud bold-red 'never leaves this machine' banner."""
+    """The yellow (caution/hold) 'never leaves this machine' banner."""
     console.print(
         Panel(Text(message, style="panel.trust"), title=title, title_align="left",
               border_style="panel.trust")

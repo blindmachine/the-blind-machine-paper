@@ -23,7 +23,7 @@ def test_credits_prints_balance():
     ctxmod.set_test_transport(mock_transport({
         ("GET", "/api/v1/credits"): {"balance_cents": 1250, "balance_usd": "12.50"},
     }))
-    r = runner.invoke(app, ["--json", "--api-key", "k", "credits"])
+    r = runner.invoke(app, ["--json", "--api-key-stdin", "credits"], input="k\n")
     assert r.exit_code == 0, r.stdout
     data = json_out(r)
     assert data["object"] == "credits"
@@ -35,7 +35,7 @@ def test_credits_pretty_shows_balance_and_top_up_url():
     ctxmod.set_test_transport(mock_transport({
         ("GET", "/api/v1/credits"): {"balance_cents": 1250, "balance_usd": "12.50"},
     }))
-    r = runner.invoke(app, ["--api-key", "k", "credits"])
+    r = runner.invoke(app, ["--api-key-stdin", "credits"], input="k\n")
     assert r.exit_code == 0, r.stdout
     assert "$12.50" in r.stdout
     assert "/billing" in r.stdout
@@ -43,8 +43,8 @@ def test_credits_pretty_shows_balance_and_top_up_url():
 
 def test_jobs_create_insufficient_credits_enriches_the_error_envelope():
     ctxmod.set_test_transport(mock_transport(_INSUFFICIENT_ROUTES))
-    r = runner.invoke(app, ["--json", "--api-key", "k",
-                            "jobs", "create", "--project", "proj_1"])
+    r = runner.invoke(app, ["--json", "--api-key-stdin",
+                            "jobs", "create", "--project", "proj_1"], input="k\n")
     assert r.exit_code == 5, r.stdout  # precondition exit code (UX.md Part D)
     data = json_out(r)
     assert data["object"] == "error"
@@ -57,8 +57,8 @@ def test_jobs_create_insufficient_credits_enriches_the_error_envelope():
 
 def test_jobs_create_insufficient_credits_prints_balance_estimate_and_top_up():
     ctxmod.set_test_transport(mock_transport(_INSUFFICIENT_ROUTES))
-    r = runner.invoke(app, ["--api-key", "k",
-                            "jobs", "create", "--project", "proj_1", "--yes"])
+    r = runner.invoke(app, ["--api-key-stdin",
+                            "jobs", "create", "--project", "proj_1", "--yes"], input="k\n")
     assert r.exit_code == 5, r.stdout
     assert "Insufficient credits" in r.stdout
     assert "$0.00" in r.stdout
@@ -72,7 +72,7 @@ def test_jobs_create_other_conflicts_still_raise():
             "estimated_cost_cents": 50, "estimated_cost_usd": "0.50"},
         ("POST", "/api/v1/projects/proj_1/jobs"): (409, {"error": "not_frozen"}),
     }))
-    r = runner.invoke(app, ["--json", "--api-key", "k",
-                            "jobs", "create", "--project", "proj_1"])
+    r = runner.invoke(app, ["--json", "--api-key-stdin",
+                            "jobs", "create", "--project", "proj_1"], input="k\n")
     assert r.exit_code != 0
     assert "not_frozen" in str(r.exception or r.stdout)

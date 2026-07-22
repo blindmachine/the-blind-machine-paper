@@ -1,0 +1,138 @@
+{
+  "experiment": "E10_gwas_chi_square_pnas2020",
+  "baseline": "Blatt/Gusev/Polyakov/Goldwasser, PNAS 2020, doi:10.1073/pnas.1918257117 (demo-chi2)",
+  "application": "gwas_chi_square",
+  "data_source": "seeded synthetic case/control cohort (seed 42)",
+  "n_individuals": 200,
+  "m_snps": 16384,
+  "cases": 97,
+  "controls": 103,
+  "security_bits": 128,
+  "invariant_bit_exact": true,
+  "checks": {
+    "sum_g_bit_exact": true,
+    "sum_gy_bit_exact": true,
+    "cases_exact": true,
+    "n_exact": true,
+    "chi2_exact": true,
+    "p_exact": true
+  },
+  "neg_log10_p_r2_vs_cleartext": 1.0,
+  "timing_s": {
+    "keygen": 0.019,
+    "encrypt_total": 3.563,
+    "encrypt_ms_per_contributor": 17.81,
+    "server_compute": 0.147,
+    "decrypt_decode": 0.02
+  },
+  "peak_rss_mib": 418.0,
+  "per_contributor_blob_kib": 1280.7,
+  "aggregate_result_kib": 1280.7,
+  "extrapolation": {
+    "per_contributor_snp_us": 0.0449,
+    "n15000_m16384_s": 11.0,
+    "n100000_m16384_s": 73.6,
+    "n100000_m500000_min_1thread": 37.4,
+    "n100000_m500000_min_31workers": 1.21,
+    "amd_26737_m263941_min_1thread": 5.3
+  },
+  "paper_reported": {
+    "chi2_n15000_m16384_s": 98,
+    "chi2_full_n25000_m49152_min": 8,
+    "lra_n15000_m16384_h": 1.1,
+    "headline_n100000_m500000": "5.6 h single node / 11 min on 31 nodes",
+    "hardware": "2x14-core Xeon E5-2680 v4, 500 GB RAM"
+  },
+  "top_hits": [
+    {
+      "snp_index": 3396,
+      "chi_square": 16.6094,
+      "p_value": 4.592184895165677e-05,
+      "neg_log10_p": 4.338,
+      "odds_ratio": 3.0589
+    },
+    {
+      "snp_index": 1444,
+      "chi_square": 16.5575,
+      "p_value": 4.7197801832515656e-05,
+      "neg_log10_p": 4.3261,
+      "odds_ratio": 0.4093
+    },
+    {
+      "snp_index": 7976,
+      "chi_square": 16.5207,
+      "p_value": 4.812074667780807e-05,
+      "neg_log10_p": 4.3177,
+      "odds_ratio": 0.4251
+    },
+    {
+      "snp_index": 14786,
+      "chi_square": 15.7389,
+      "p_value": 7.271155066607058e-05,
+      "neg_log10_p": 4.1384,
+      "odds_ratio": 3.1544
+    },
+    {
+      "snp_index": 14849,
+      "chi_square": 14.572,
+      "p_value": 0.00013490185894318789,
+      "neg_log10_p": 3.87,
+      "odds_ratio": 4.35
+    },
+    {
+      "snp_index": 7430,
+      "chi_square": 13.7023,
+      "p_value": 0.00021418834779604728,
+      "neg_log10_p": 3.6692,
+      "odds_ratio": 0.3782
+    },
+    {
+      "snp_index": 8579,
+      "chi_square": 13.6431,
+      "p_value": 0.0002210566187023793,
+      "neg_log10_p": 3.6555,
+      "odds_ratio": 5.407
+    },
+    {
+      "snp_index": 3219,
+      "chi_square": 13.2331,
+      "p_value": 0.00027504125727838215,
+      "neg_log10_p": 3.5606,
+      "odds_ratio": 2.5154
+    },
+    {
+      "snp_index": 2001,
+      "chi_square": 12.8268,
+      "p_value": 0.0003416929985249223,
+      "neg_log10_p": 3.4664,
+      "odds_ratio": 2.1329
+    },
+    {
+      "snp_index": 15667,
+      "chi_square": 12.5312,
+      "p_value": 0.0004002041309354963,
+      "neg_log10_p": 3.3977,
+      "odds_ratio": 0.488
+    }
+  ],
+  "covariate_adjusted": {
+    "application": "gwas_covariate_adjusted",
+    "baseline": "Blatt et al. PNAS 2020 (demo-logistic / LRA, semi-parallel score test)",
+    "neg_log10_p_r2_vs_cleartext": 0.999995,
+    "concordant_not_bit_exact": true,
+    "covariates": [
+      "sex",
+      "age",
+      "age2"
+    ],
+    "wall_s": 8.468,
+    "per_contributor_blob_kib": 3329.9,
+    "top_hits_idx": [
+      3396,
+      14786,
+      4401,
+      1444,
+      898
+    ]
+  }
+}

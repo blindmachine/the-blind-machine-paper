@@ -1,0 +1,83 @@
+# Blind Machine curated application bundle — gwas_covariate_adjusted.
+#
+# Reproduces the covariate-adjusted GWAS of Blatt, Gusev, Polyakov & Goldwasser,
+# PNAS 2020 (doi:10.1073/pnas.1918257117) — their Logistic Regression Approximation
+# (LRA), a semi-parallel score test (Sikorska et al.) that adjusts each SNP's
+# case/control association for covariates (sex, age, age²) — under The Blind
+# Machine's multiparty model and with the LEAST POWERFUL HE scheme that does the
+# job: additive-only BFV. Each data owner forms every product a semi-parallel GWAS
+# needs (the covariate Gram x·xᵀ, x·y, and per-SNP x·g) LOCALLY, in the clear, so
+# the server only ADDS; the project owner inverts the tiny k×k covariate matrix and
+# runs the per-SNP score test in cleartext after decryption.
+#
+# Continuous covariates are fixed-point encoded (SCALE=1024), so the reproduction is
+# highly concordant (-log10(p) R² ≈ 1.00 vs the cleartext regression, matching the
+# paper's own R²=1.00 vs exact logistic) rather than bit-exact; the homomorphic sums
+# themselves are exact BFV. See applications/gwas_covariate_adjusted/BENCHMARK.md.
+name: gwas_covariate_adjusted
+version: 1.0.0
+
+builder:
+  type: uv
+  project: env
+
+crypto: tenseal-bfv           # display hint; real deps live in env/uv.lock
+computation: additive_bfv     # server does ONLY homomorphic addition; all products
+                              # (covariate Gram, x*y, x*g, g*y, g*g) are precomputed
+                              # LOCALLY by each data owner
+min_contributors: 20
+
+# The published definition: the SNP coordinate list, the case/control phenotype
+# coding, AND the covariate schema (intercept + 3 covariates: sex, age, age²),
+# all folded into the bundle SHA-256. `length` is the SNP count per run (chunked at
+# 8192 slots/ciphertext). Set to 16,384 to match the Duality demo (random_sample.csv).
+input:
+  genotype:
+    type: integer_vector
+    length: 16384
+    value_domain: [0, 1, 2]     # alt-allele dosage per SNP; missing -> 0
+    coordinates:
+      kind: snp_dosage_block
+      fields: [chrom, pos, ref, alt]
+  phenotype:
+    type: integer_scalar
+    coding: case_control        # binary; 0 = control, 1 = case
+    value_domain: [0, 1]
+  covariates:
+    type: real_vector           # continuous; fixed-point encoded at SCALE=1024
+    count: 3                    # sex, age, age² (k = 1 intercept + 3 = 4)
+    value_domain: [-1, 1]       # ENFORCED at encode time: covariates must be
+                                # normalized to [-1, 1] (the demo's are in [0,1]).
+                                # An out-of-range covariate is refused locally, so it
+                                # cannot silently overflow the plaintext modulus.
+  submitted_as: one_packed_ciphertext_container
+
+output:
+  shape: covariate_adjusted_association  # per-SNP beta, score chi-square, p-value
+  exactness: exact              # BFV sums are exact in Z_t; the fixed-point covariate
+                                # encoding is an authored approximation, not an HE one
+  tolerance: 0
+  # The per-SNP beta / z / p are a deterministic cleartext function (the semi-parallel
+  # score test + k×k covariate inverse) of the exact integer sufficient statistics.
+
+release_policy:
+  aggregate_only: true          # only the summed sufficient statistics are decrypted
+  allowed_runs_per_project: 1   # run cap (differencing mitigation, not a defense)
+
+# Additive-only, but the covariate-adjusted moments (k covariate/genotype cross
+# series + g*y + g*g) make each contribution larger than the chi-square app.
+resources:
+  max_memory_mb: 12288
+  max_wall_seconds: 3600
+  max_ciphertext_mb: 2048
+
+scenario:
+  name: aggregate
+  roles:
+    project_owner: { file: local_project_owner.py, functions: [ keygen, decrypt, decode ] }
+    data_owner:    { file: local_data_owner.py,    functions: [ encode, encrypt ] }
+    server:        { file: server.py,              functions: [ compute ] }
+
+hashes:
+  bundle: null
+  env_lock: null

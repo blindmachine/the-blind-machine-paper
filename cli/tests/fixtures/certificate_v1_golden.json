@@ -1,0 +1,20 @@
+{
+  "object": "computation_certificate",
+  "schema_version": "1",
+  "hash_rule": "sha256(json(certificate, keys sorted, compact))",
+  "certificate_hash": "6a33305ae615bed748812dd996beaa8d49dc99e1f619ad26229ce0570b81598f",
+  "issued_at": "2026-07-08T07:48:03Z",
+  "certificate": {
+    "application_digest": "de63726e197414701581f0230e307e0de05cdf0f523d084d9b9db24230c995a5",
+    "cohort_commitment": "ed08b2a55bde96a17f8321c1d06da83b3e06c63335772335899b27a2bf780d5c",
+    "cohort_size": 2,
+    "computation_run_id": 31208118,
+    "min_contributors": 2,
+    "min_n_satisfied": true,
+    "project_id": 946859852,
+    "public_context_digest": "b81adb8e3191839a8e04926ae7fd0a09256edba5bcc93c6e5668a2265fbd051d",
+    "release_policy": "aggregate_only",
+    "result_digest": "5b5c9d894b0eef9579a3dbdae3d7f9990e0e33f2cb7581ab8f84586252a89833",
+    "run_count": 1
+  }
+}

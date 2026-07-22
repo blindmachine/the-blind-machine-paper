@@ -78,6 +78,7 @@ _SEALED_ENV_APPS = (
     "carrier_count",
     "cohort_histogram",
     "polygenic_score_aggregate",
+    "polygenic_score_inference",
     "allele_frequency_with_variance",
     "genotype_phenotype_covariance",
     "genotype_pair_ld",

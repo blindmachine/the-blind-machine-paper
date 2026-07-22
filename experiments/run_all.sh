@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# run_all.sh — the E1-E4 synthetic-core harness only (the offline, deterministic
+# BFV claims). This is NOT the full-paper entrypoint: for the whole paper (E1-E10,
+# including the public-genome studies E5-E8 and the published-study reproductions
+# E9-E10) run the canonical `replicate_all.sh`, which drives this script as its
+# first stage. Use this script directly only when you want the fast synthetic core.
+#
 # One command to reproduce the paper's core empirical claims — entirely locally,
 # no hosted server, no network, no real data.
 #

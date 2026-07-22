@@ -1,0 +1,176 @@
+name: Verify distributions
+
+on:
+  workflow_call:
+    inputs:
+      release:
+        description: Require the git tag to match the package version
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: 0.11.28
+  GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks@sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9 # v8.30.0
+
+jobs:
+  tests:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    env:
+      PYTHON_VERSION: ${{ matrix.python-version }}
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Sync the reviewed lock
+        run: uv sync --locked --python "$PYTHON_VERSION"
+      - name: Run the test suite
+        run: uv run --locked --python "$PYTHON_VERSION" pytest -m "not live_sandbox"
+
+  audit:
+    name: Static and dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out without persisted credentials
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Verify lock and runtime metadata closure
+        run: |
+          uv lock --check
+          uv sync --locked --python 3.13 --extra dev --group security
+          uv run --locked python scripts/check_runtime_lock.py
+      - name: Verify commit metadata privacy
+        run: uv run --locked python scripts/check_commit_metadata.py --allow-pull-request-merge
+      - name: Lint reviewed source
+        run: uv run --locked --extra dev ruff check src tests scripts examples
+      - name: Scan Python security hazards
+        run: uv run --locked --group security bandit -q -r src examples
+      - name: Audit locked runtime dependencies
+        run: |
+          uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file /tmp/blind-runtime.txt
+          uv run --locked --group security pip-audit --requirement /tmp/blind-runtime.txt --no-deps --disable-pip
+      - name: Audit workflow security
+        run: uv run --locked --group security zizmor .github/workflows
+
+  secret-scan:
+    name: Full-history secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out full history without persisted credentials
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan git history with pinned Gitleaks
+        run: |
+          docker pull --platform linux/amd64 "$GITLEAKS_IMAGE"
+          docker run --rm --platform linux/amd64 \
+            --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges=true \
+            --user "$(id -u):$(id -g)" \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m \
+            --mount type=bind,source="$PWD",target=/repo,readonly \
+            --workdir /repo "$GITLEAKS_IMAGE" \
+            detect --source . --verbose --no-banner --redact
+
+  live-sandbox:
+    name: Live kernel sandbox probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out without persisted credentials
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Verify Docker daemon
+        run: docker info
+      - name: Sync the reviewed lock
+        run: uv sync --locked --python 3.11
+      - name: Prove isolation and pipe-only private input delivery
+        env:
+          BLIND_RUN_LIVE_SANDBOX_TESTS: "1"
+        run: uv run --locked pytest tests/test_sandbox.py -m live_sandbox
+
+  package:
+    name: Build and inspect distributions
+    needs: [tests, audit, secret-scan, live-sandbox]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out a fresh, unmodified revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Verify release tag
+        if: inputs.release
+        run: uv run --locked python scripts/check_release_tag.py --allow-main
+      - name: Verify the lock before building
+        run: |
+          uv lock --check
+          uv run --locked python scripts/check_runtime_lock.py
+      - name: Build wheel and source distribution
+        run: uv build --no-sources
+      - name: Inspect exact artifact contents
+        run: uv run --locked python scripts/check_dist.py
+      - name: Smoke-test the wheel in a fresh environment
+        run: |
+          uv venv --python 3.11 /tmp/blind-wheel-smoke
+          uv pip install --python /tmp/blind-wheel-smoke/bin/python dist/*.whl
+          /tmp/blind-wheel-smoke/bin/python tests/smoke_test.py
+      - name: Smoke-test the sdist in a fresh environment
+        run: |
+          uv venv --python 3.11 /tmp/blind-sdist-smoke
+          uv pip install --python /tmp/blind-sdist-smoke/bin/python dist/*.tar.gz
+          /tmp/blind-sdist-smoke/bin/python tests/smoke_test.py
+      - name: Retain only verified release artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: distributions
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

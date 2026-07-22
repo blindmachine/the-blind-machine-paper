@@ -88,6 +88,7 @@ material under an ignored `work/` directory and commits aggregate-only outputs.
 | `e6_public_af_fst_panel.sh` | 50-sample public 1000 Genomes AF, variance, group suppression, and FST-like summaries using existing allele apps | `public_af_fst_2026_07_09/results/` | `https://blindmachine.org/verify/paper/public-genomics-e6-af-fst` |
 | `e7_beacon_release_policy.sh` | Beacon-style adjacent-release risk and why min-N/freeze/query budgets matter after encrypted computation | `beacon_release_policy_2026_07_09/results/` | `https://blindmachine.org/verify/paper/public-genomics-e7-beacon-policy` |
 | `e8_public_ld_window.sh` | Draft `genotype_pair_ld` encrypted-product application over adjacent public genotype pairs | `public_ld_window_2026_07_09/results/` | `https://blindmachine.org/verify/paper/public-genomics-e8-ld-window` |
+| `e9_heprs_prs_reproduction.sh` | Reproduces a published FHE-PRS study (HEPRS, Knight et al. 2026) with `polygenic_score_inference` — bit-exact per-individual PRS under a PUBLIC model, on HEPRS's own public example; asserts exactness + reproduction of their predictions (Pearson r > 0.9999) | `heprs_prs_reproduction_2026_07_17/results/` | (offline; vendored synthetic data) |
 
 Regenerate the appendix tables and SVG figure sources with:
 
@@ -123,7 +124,7 @@ per-contributor TenSEAL re-import startup), not the isolated hosted stage.
 ## Files
 
 - `setup.sh` — seal the six envs (`uv sync --frozen`) + install bundles into an
-  offline, experiment-local `$BLIND_HOME` (`.blind-home/`, git-ignored).
+  offline `~/.blind` under an experiment-local `HOME` (`.blind-home/`, git-ignored).
 - `e1..e4_*.sh` — the four experiments (above).
 - `verify.py` — consolidate `results/raw/*.json` into `results/*.csv` and ASSERT
   the invariants; exit non-zero on any failure.

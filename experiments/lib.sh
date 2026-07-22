@@ -43,9 +43,10 @@ if [ -z "$CLI_DIR" ] || [ ! -d "$CLI_DIR" ]; then
   exit 1
 fi
 
-# A self-contained, experiment-local ~/.blind so a run never touches the
-# reviewer's real CLI state and is trivially discarded (rm -rf .blind-home).
-export BLIND_HOME="$EXP_DIR/.blind-home"
+# A self-contained HOME keeps the CLI's fixed ~/.blind store away from the
+# reviewer's real state and is trivially discarded (rm -rf .blind-home).
+export BLIND_PAPER_HOME="$EXP_DIR/.blind-home"
+export BLIND_STATE_DIR="$BLIND_PAPER_HOME/.blind"
 
 # The one seed the whole paper is reproducible from. Synthetic cohorts are drawn
 # under Hardy-Weinberg equilibrium and are bit-for-bit determined by (seed, N, L).
@@ -78,7 +79,7 @@ ALL_APPLICATIONS=("${APPLICATIONS[@]}" "${DRAFT_APPLICATIONS[@]}")
 
 # Run the offline `blind` CLI from its own uv environment, pointed at the
 # experiment-local store. Stdout stays clean JSON under `--json`.
-blind() { ( cd "$CLI_DIR" && BLIND_HOME="$BLIND_HOME" uv run blind "$@" ); }
+blind() { ( cd "$CLI_DIR" && HOME="$BLIND_PAPER_HOME" uv run blind "$@" ); }
 
 # Run one benchmark cell and save the full JSON under results/raw/<tag>.json.
 # Usage: bench_cell <tag> <application> [extra blind bench args...]

@@ -24,6 +24,12 @@ bit-for-bit — and what is ASSERTED here — is:
          asserted: the 128-bit ciphertext sizes (E1 table + E2 128-bit column) and
          the feasibility sizes. The 192/256-bit ciphertext sizes vary by tens of
          bytes across TenSEAL builds and are reported, not asserted.
+  INV-7  the two published-study reproductions are bit-exact where the paper
+         claims bit-exactness (E9 HEPRS: encrypted score == oracle, Pearson r vs
+         HEPRS >= 0.9999999; E10 GWAS chi-square: integer sufficient statistics
+         bit-exact, -log10(p) concordance R² == 1.0) and concordant where it
+         claims concordance (E10 covariate-adjusted: R² >= 0.999). Wall-clock and
+         memory in Tables 17-18 stay hardware-dependent and are NOT asserted.
 """
 from __future__ import annotations
 
@@ -103,7 +109,7 @@ def verify_e1() -> None:
     if not all(docs.values()):
         print("[E1] skipped (run e1_exactness_taxonomy.sh first)")
         return
-    print("[E1] two-tier BFV exactness taxonomy (Table 4) + payload-premium source data (Table 5)")
+    print("[E1] two-tier BFV exactness taxonomy (Table 6) + payload-premium source data (Table 7)")
     rows, ct_per_contrib = [], {}
     exact_additive, exact_mult = set(), set()
     for p in ALL_APPLICATIONS:
@@ -130,7 +136,14 @@ def verify_e1() -> None:
     afc = ct_per_contrib.get("allele_frequency_count")
     var = ct_per_contrib.get("allele_frequency_with_variance")
     cov = ct_per_contrib.get("genotype_phenotype_covariance")
-    if None not in (afc, var, cov):
+    if None in (afc, var, cov) or not afc:
+        # A degenerate/partial cell (missing or zero ciphertext size) must not
+        # crash the premium division below — record it as an explicit invariant
+        # failure so the harness reports FAIL cleanly instead of a traceback.
+        check(False,
+              "INV-3  payload premium needs nonzero additive/variance/covariance "
+              f"ciphertext sizes (got afc={afc}, var={var}, cov={cov})")
+    else:
         check(afc < var < cov,
               f"INV-3  payload premium ordering additive({afc}B) < variance({var}B) < covariance({cov}B)")
         _write_csv("table_c_premium.csv", [
@@ -148,7 +161,7 @@ def verify_e2() -> None:
     if not any(docs.values()):
         print("[E2] skipped (run e2_security_matrix.sh, or `run_all.sh full`)")
         return
-    print("[E2] security-level matrix 128/192/256 (Table 6)")
+    print("[E2] security-level matrix 128/192/256 (Table 8)")
     rows = []
     for p in ALL_APPLICATIONS:
         if not docs[p]:
@@ -218,13 +231,16 @@ def verify_expected_references() -> None:
         print("[REF] INV-6: live E1 128-bit table == committed results/expected/table_b_reference.json")
         for p in ALL_APPLICATIONS:
             cell, want = e1[p]["cells"][0], ref_b.get(p, {})
-            live_ct = int(cell["ct_bytes_per_contribution"])
+            live_ct = int(cell.get("ct_bytes_per_contribution") or 0)
             check(live_ct == int(want.get("ct_bytes_per_contribution", -1)),
                   f"INV-6  {p}: ct/contribution {live_ct} == committed {want.get('ct_bytes_per_contribution')}")
-            check(cell["crypto"] == want.get("crypto"),
-                  f"INV-6  {p}: crypto {cell['crypto']} == committed {want.get('crypto')}")
-            check(float(cell["max_error"]) == float(want.get("max_error", "nan")),
-                  f"INV-6  {p}: max_error == committed {want.get('max_error')}")
+            check(cell.get("crypto") == want.get("crypto"),
+                  f"INV-6  {p}: crypto {cell.get('crypto')} == committed {want.get('crypto')}")
+            # A degenerate cell (max_error null / ct 0 from a run without the
+            # sealed engine) must report a clean FAIL, not a float(None) crash.
+            live_me, want_me = cell.get("max_error"), want.get("max_error")
+            check(live_me is not None and want_me is not None and float(live_me) == float(want_me),
+                  f"INV-6  {p}: max_error {live_me} == committed {want_me}")
 
     ref_f = _load_expected("feasibility_reference.json")
     e3 = _load("e3__afc")
@@ -251,6 +267,63 @@ def verify_expected_references() -> None:
                       f"INV-6  {p}@128-bit: ct/contribution {live['128']} == committed {want128}")
 
 
+# --- E9/E10: published-study reproductions (machine-independent exactness) --
+# The two headline reproductions (Section 8.3 HEPRS, Section 8.4 GWAS) keep their
+# evidence in per-study results/ dirs rather than results/raw/. Assert ONLY the
+# machine-independent invariants — the bit-exactness flags and the committed
+# -log10(p) concordance R² — never the hardware-dependent wall-clock or memory,
+# exactly as E1-E4 do. Absent files are a clean skip, not a failure.
+def _load_json(path: str):
+    if not os.path.exists(path):
+        return None
+    with open(path) as handle:
+        text = handle.read()
+    if not text.strip():
+        raise PartialResultError(f"{os.path.relpath(path, EXP)} is empty (0 bytes): interrupted run.")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise PartialResultError(f"{os.path.relpath(path, EXP)} is not valid JSON ({exc}).") from exc
+
+
+def verify_e9_e10() -> None:
+    heprs = os.path.join(EXP, "heprs_prs_reproduction_2026_07_17", "results")
+    gwas_dir = os.path.join(EXP, "gwas_chi_square_pnas2020_2026_07_17", "results")
+    repro = _load_json(os.path.join(heprs, "reproduction.json"))
+    h2h = _load_json(os.path.join(heprs, "head_to_head_benchmark.json"))
+    gwas = _load_json(os.path.join(gwas_dir, "gwas_chi_square_pnas2020.json"))
+    if not any((repro, h2h, gwas)):
+        print("[E9/E10] skipped (run e9_heprs_prs_reproduction.sh / e10_gwas_chi_square.sh)")
+        return
+    print("[E9/E10] published-study reproductions: HEPRS PRS (Table 17) + Blatt et al. GWAS (Table 18)")
+    if repro:
+        ex = repro.get("example", {})
+        check(ex.get("encrypted_equals_plaintext_oracle_exact") is True,
+              "INV-7  E9 HEPRS: encrypted score == plaintext oracle (bit-exact)")
+        check(float(ex.get("pearson_r_vs_heprs_pred", 0)) >= 0.9999999,
+              "INV-7  E9 HEPRS: reproduces HEPRS predictions (Pearson r >= 0.9999999)")
+        check(all(bool(r.get("exact")) for r in repro.get("scaling", [])),
+              "INV-7  E9 HEPRS: every scaling cell bit-exact")
+        check(repro.get("pass") is True, "INV-7  E9 HEPRS: reproduction PASS")
+    if h2h:
+        check(bool(h2h.get("example", {}).get("exact")),
+              "INV-7  E9 HEPRS head-to-head: example bit-exact")
+        check(all(bool(r.get("exact")) for r in h2h.get("sweep", [])),
+              "INV-7  E9 HEPRS head-to-head: every sweep cell bit-exact (flat-memory evidence, Table 17)")
+    if gwas:
+        check(gwas.get("invariant_bit_exact") is True,
+              "INV-7  E10 GWAS chi-square: sufficient statistics bit-exact")
+        checks = gwas.get("checks", {})
+        for key in ("sum_g_bit_exact", "sum_gy_bit_exact", "cases_exact", "n_exact", "chi2_exact", "p_exact"):
+            check(checks.get(key) is True, f"INV-7  E10 GWAS chi-square: {key}")
+        check(float(gwas.get("neg_log10_p_r2_vs_cleartext", 0)) >= 0.999999,
+              "INV-7  E10 GWAS chi-square: -log10(p) concordance R² == 1.0 (bit-exact)")
+        cov = gwas.get("covariate_adjusted", {})
+        if cov:
+            check(float(cov.get("neg_log10_p_r2_vs_cleartext", 0)) >= 0.999,
+                  "INV-7  E10 GWAS covariate-adjusted: -log10(p) concordance R² >= 0.999 (concordant, not bit-exact)")
+
+
 def main() -> int:
     print("=" * 72)
     print("The Blind Machine — experiment verification (machine-independent invariants)")
@@ -260,6 +333,7 @@ def main() -> int:
         verify_e2()
         verify_e3()
         verify_e4()
+        verify_e9_e10()
         verify_expected_references()
     except PartialResultError as exc:
         print("-" * 72)

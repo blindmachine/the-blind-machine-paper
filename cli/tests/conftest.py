@@ -1,10 +1,10 @@
 """Shared test fixtures.
 
 Every test runs with:
-  * BLIND_HOME pointed at a temp dir (no touching the real ~/.blind),
-  * BLIND_NO_KEYRING=1 (deterministic file-fallback secret storage),
-  * BLIND_STAGE_RUNNER=direct (stage scripts run under the system interpreter,
-    since the fake bundles carry a stub, value-preserving "crypto" — no uv/tenseal),
+  * the production home resolver injected with a temp dir (no real ~/.blind),
+  * BLIND_SECRET_BACKEND=file (explicit deterministic test-only secret storage),
+  * BLIND_STAGE_RUNNER=direct plus the named unsafe opt-in (fake stages run under
+    the test interpreter, so the unit suite needs no container or TenSEAL),
 and ZERO network calls (the API is exercised via httpx.MockTransport).
 """
 
@@ -15,6 +15,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+import blind.store as store_module
 from blind.hashing import canonical_bundle_digest
 from blind.runtime import bundle as bundle_mod
 from blind.store import Store
@@ -47,11 +48,9 @@ else:
     (work/"output.json").write_text(json.dumps({"meta": {"public": pub, "secret": sec}}))
 '''
 
-# The encode stub ALSO defines a module-level, TenSEAL-free `encode(vector, length)`
-# (pad/truncate — identity for synthetic length-L cohorts) that the application_io
-# oracle imports in-process (blind.runtime.application_io._encode_and_sum). Its CLI
-# body is under `if __name__ == "__main__"` so that import (exec_module) only
-# defines the function without running the stage.
+# The encode stub also defines its stage-local transform. Production oracles never
+# import this bundle code into the host interpreter; they reconstruct the signed
+# manifest's declarative transform in trusted CLI code.
 _ENCODE = '''\
 import argparse, hashlib, json, sys
 from pathlib import Path
@@ -105,7 +104,7 @@ else:
 
 # The compute stub speaks BOTH conventions: the server/worker argparse contract
 # (--context/--inputs/--out — what the real flagship 30_compute_encrypted.py
-# implements and what `results verify --local` drives) AND the CLI's local
+# implements and what the local simulate/compute path drives) AND the CLI's local
 # workdir/input.json convention (what run_stage/simulate drive for stub bundles).
 _COMPUTE = '''\
 import json, sys, hashlib
@@ -282,9 +281,11 @@ def _write_bundle_files(root: Path, name: str, length: int = 4,
 @pytest.fixture(autouse=True)
 def blind_env(tmp_path, monkeypatch):
     home = tmp_path / "dot-blind"
-    monkeypatch.setenv("BLIND_HOME", str(home))
-    monkeypatch.setenv("BLIND_NO_KEYRING", "1")
+    monkeypatch.setattr(store_module, "blind_home", lambda: home)
+    monkeypatch.setenv("BLIND_SECRET_BACKEND", "file")
     monkeypatch.setenv("BLIND_STAGE_RUNNER", "direct")
+    monkeypatch.setenv("BLIND_UNSAFE_ALLOW_DIRECT_STAGE_RUNNER", "1")
+    monkeypatch.setenv("BLIND_UNSAFE_SKIP_SEAL", "1")
     monkeypatch.setenv("NO_COLOR", "1")
     # reset any leaked test transport between tests
     import blind.context as ctxmod
@@ -307,6 +308,7 @@ def signing_keys(monkeypatch):
         encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
     ).hex()
     monkeypatch.setenv("BLIND_SIGNING_KEY", pub_hex)
+    monkeypatch.setenv("BLIND_UNSAFE_ALLOW_CUSTOM_SIGNING_KEY", "1")
     # keep module-level cache in sync (bundle.py reads it at import)
     monkeypatch.setattr(bundle_mod, "_BUILTIN_SIGNING_KEY_HEX", pub_hex, raising=False)
     return {"private_hex": priv_hex, "public_hex": pub_hex}
@@ -364,31 +366,22 @@ def installed_mul(make_bundle):
         computation="multiplicative_bfv", compute_src=_COMPUTE_MUL)
 
 
-# --- REAL bundle handles (not stubs) ---------------------------------------
-# The stub bundles above are single-output and value-preserving — they never
-# exercise the multi-ciphertext (genotype+phenotype) contribution shape, so a
-# divergence between the `application_io` adapter and a real bundle's stage CLI
-# (e.g. the covariance adapter declaring `encrypt_outputs=2` while
-# `20_encrypt.py` only accepts `--out`) sails through the stub suite. These
-# fixtures hand tests the REAL shipped bundle so that adapter↔stage contract
-# can be asserted directly. Skips cleanly when run outside the monorepo tree.
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _real_bundle(application_name: str):
-    src = REPO_ROOT / "applications" / application_name
-    if not (src / "signed" / "manifest.yml").exists():
-        pytest.skip(f"real bundle {application_name!r} not present at {src}")
-    return bundle_mod.load_bundle(src)
-
-
 @pytest.fixture
-def covariance_bundle():
-    """The REAL genotype_phenotype_covariance bundle (one packed (g,y) blob per
-    contributor). Lets a test assert the `application_io` adapter agrees with the
-    shipped `20_encrypt.py` CLI — the seam that broke B0."""
-    return _real_bundle("genotype_phenotype_covariance")
+def covariance_bundle(make_bundle, signing_keys):
+    """Self-contained signed fixture with the covariance manifest shape."""
+    import yaml
+
+    src, _ = make_bundle(name="genotype_phenotype_covariance")
+    manifest_path = src / "signed" / "manifest.yml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    manifest["input"] = {
+        "genotype": {"type": "integer_vector", "length": 4, "value_domain": [0, 1, 2]},
+        "phenotype": {"type": "integer_scalar", "value_domain": [0, 1]},
+        "submitted_as": "one_packed_pair_ciphertext",
+    }
+    manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
+    bundle_mod.sign_bundle(src, signing_keys["private_hex"])
+    return bundle_mod.load_bundle(src)
 
 
 def json_out(result):

@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import os
+import secrets
+import shutil
+import tempfile
+from pathlib import Path
+
 import typer
 
 from blind import console
 from blind.context import Context, emit
 from blind.errors import VerificationError
-from blind.hashing import short, split_application_id
+from blind.hashing import digests_match, short, split_application_id
 from blind.runtime import bundle as bundle_mod
 from blind.runtime.sealer import seal_env, verify_env_lock
+from blind.store import validate_component, validate_digest
 from blind.workspace import installed_bundle
 
 app = typer.Typer(help="The public curated application registry + install/verify.", no_args_is_help=True)
@@ -48,7 +55,10 @@ def list_applications(c: typer.Context, crypto: str = typer.Option(None, "--cryp
 def retrieve(c: typer.Context, name: str, version: str = typer.Option(None, "--version")):
     ctx = _ctx(c)
     base, digest = split_application_id(name)
+    base = validate_component(base, "application name")
     digest = version or digest
+    if digest:
+        digest = validate_digest(digest, "application digest")
     if digest:
         data = ctx.client().retrieve_application_version(base, digest)
     else:
@@ -72,7 +82,6 @@ def install(
     name: str,
     version: str = typer.Option(None, "--version"),
     force: bool = typer.Option(False, "--force"),
-    no_seal: bool = typer.Option(False, "--no-seal", help="skip the uv env BUILD phase"),
 ):
     ctx = _ctx(c)
     base, digest = split_application_id(name)
@@ -83,32 +92,61 @@ def install(
         digest = meta.get("latest_digest") or meta.get("digest")
     if not digest:
         raise VerificationError(f"Could not resolve a digest for {base}")
+    digest = validate_digest(digest, "registry application digest")
 
     application_id = f"{base}@{digest}"
     dest = ctx.store.application_dir(application_id)
     if dest.exists() and not force:
+        # Reverify every trust boundary before treating an existing directory as
+        # installed. A partial or locally modified install never short-circuits.
         b = installed_bundle(ctx.store, application_id)
         view = {"object": "application_install", "application": application_id,
                 "digest": b.digest, "already_installed": True}
         emit(ctx, view, lambda: console.line("identical", application_id, "already installed"))
         return
 
-    tar = client.download_bundle(base, digest)
-    if dest.exists():
-        import shutil
-        shutil.rmtree(dest)
-    bundle_mod.extract_bundle(tar, dest)
-    sig = client.download_signature(base, digest)
-    (dest / ".blind-signature").write_bytes(sig if isinstance(sig, bytes) else str(sig).encode())
+    ctx.store.ensure_layout()
+    staging = Path(tempfile.mkdtemp(prefix=f".{base}-install-", dir=dest.parent))
+    backup: Path | None = None
+    try:
+        tar = client.download_bundle(base, digest)
+        bundle_mod.extract_bundle(tar, staging)
+        bundle_mod.verify_download_structure(staging)
+        sig = client.download_signature(base, digest)
+        signature_path = staging / ".blind-signature"
+        signature_path.write_bytes(sig if isinstance(sig, bytes) else str(sig).encode())
+        if os.name == "posix":
+            signature_path.chmod(0o600)
 
-    b = bundle_mod.load_bundle(dest)
-    bundle_mod.verify_digest(dest, digest)  # recomputed == server/name suffix
-    # FAIL CLOSED: verify_signature now always verifies against a pinned key and
-    # RAISES VerificationError on a missing / forged / weak signature, so an
-    # unsigned or server-tampered bundle never reaches seal_env / execution. A
-    # True return is a real pinned-key Ed25519 verification.
-    sig_ok = bundle_mod.verify_signature(dest)
-    seal = seal_env(b, no_seal=no_seal)
+        b = bundle_mod.load_bundle(staging)
+        if b.name != base:
+            raise VerificationError(
+                f"Registry application name mismatch: signed {b.name!r}, requested {base!r}"
+            )
+        bundle_mod.verify_digest(staging, digest)
+        sig_ok = bundle_mod.verify_signature(staging)
+        seal = seal_env(b)
+
+        if dest.exists():
+            backup = dest.with_name(f".{dest.name}.backup-{secrets.token_hex(8)}")
+            os.replace(dest, backup)
+        try:
+            os.replace(staging, dest)
+        except Exception:
+            if backup is not None and backup.exists() and not dest.exists():
+                os.replace(backup, dest)
+                backup = None
+            raise
+        if backup is not None:
+            shutil.rmtree(backup)
+            backup = None
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+        if backup is not None and backup.exists() and dest.exists():
+            # The verified install is already committed. A stale private backup
+            # is safer to remove than to leave executable under applications/.
+            shutil.rmtree(backup)
 
     view = {
         "object": "application_install",
@@ -132,9 +170,21 @@ def install(
 @app.command("verify")
 def verify(c: typer.Context, name: str, all_: bool = typer.Option(False, "--all")):
     ctx = _ctx(c)
-    b = installed_bundle(ctx.store, name)
+    d = ctx.store.application_dir(name)
+    if not d.is_dir():
+        raise VerificationError(f"Application is not installed: {name}")
+    b = bundle_mod.load_bundle(d)
     checks = {}
-    checks["digest"] = (b.digest == split_application_id(name)[1]) if "@" in name else True
+    expected_name, expected_digest = split_application_id(name)
+    checks["digest"] = (
+        b.name == expected_name and digests_match(b.digest, expected_digest)
+        if expected_digest else b.name == expected_name
+    )
+    try:
+        bundle_mod.verify_installed_structure(d)
+        checks["structure"] = True
+    except VerificationError:
+        checks["structure"] = False
     try:
         checks["signature"] = bool(bundle_mod.verify_signature(b.root))
     except VerificationError:
@@ -148,9 +198,15 @@ def verify(c: typer.Context, name: str, all_: bool = typer.Option(False, "--all"
         console.status_line(checks["digest"], "digest", short(b.digest))
         console.status_line(checks["signature"], "signature",
                             "Ed25519 (pinned)" if checks["signature"] else "invalid/unsigned")
+        console.status_line(checks["structure"], "structure", "no unsigned shadow artifacts")
         console.status_line(checks["env_lock"], "env_lock", short(b.compute_env_lock()))
 
     emit(ctx, view, render)
+    # Fail closed on the EXIT CODE too, not just the rendered rows: a scripted /
+    # CI caller that trusts `blind applications verify` must see a nonzero exit
+    # for a tampered, unsigned, or env-drifted bundle (mirrors `certificates verify`).
+    if not ok:
+        raise typer.Exit(code=VerificationError.code)
 
 
 @app.command("explain")

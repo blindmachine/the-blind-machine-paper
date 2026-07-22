@@ -4,6 +4,7 @@ the interleaved fine-stage shape), dedupe, terminal detection, failure_reason.""
 from __future__ import annotations
 
 import httpx
+import pytest
 from typer.testing import CliRunner
 
 import blind.context as ctxmod
@@ -50,8 +51,11 @@ def _ndjson_route(body: str):
 
 
 def _watch(job: str = "job_1", *extra):
-    return runner.invoke(app, ["--json", "--api-key", "k", "jobs", "watch", job,
-                               "--interval", "0", *extra])
+    return runner.invoke(
+        app,
+        ["--json", "--api-key-stdin", "jobs", "watch", job, "--interval", "0", *extra],
+        input="k\n",
+    )
 
 
 def test_watch_legacy_four_line_shape():
@@ -142,14 +146,16 @@ def test_watch_pretty_mode_renders_stages_and_completion_panel():
     ctxmod.set_test_transport(mock_transport({
         ("GET", "/api/v1/jobs/job_1/events"): _ndjson_route(FINE_COMPLETED),
     }))
-    r = runner.invoke(app, ["--api-key", "k", "jobs", "watch", "job_1", "--interval", "0"])
+    r = runner.invoke(
+        app, ["--api-key-stdin", "jobs", "watch", "job_1", "--interval", "0"], input="k\n"
+    )
     assert r.exit_code == 0, r.stdout
     assert "verify_contexts" in r.stdout
     assert "seal_env" in r.stdout
     assert "Job complete" in r.stdout
 
 
-def test_job_events_skips_malformed_lines_and_keeps_unknown_keys():
+def test_job_events_refuses_malformed_lines():
     body = "\n".join([
         '{"stage":"queued","at":"t0"}',
         "this is not json",
@@ -162,8 +168,24 @@ def test_job_events_skips_malformed_lines_and_keeps_unknown_keys():
     client = ApiClient("https://x.test", token="t",
                        transport=mock_transport({
                            ("GET", "/api/v1/jobs/job_1/events"): _ndjson_route(body)}))
+    from blind.errors import VerificationError
+
+    with pytest.raises(VerificationError):
+        client.job_events("job_1")
+
+
+def test_job_events_keeps_unknown_keys_in_valid_stream():
+    body = '\n'.join([
+        '{"stage":"queued","at":"t0"}',
+        '{"stage":"verify_contexts","at":"t1","status":"ok","novel_key":123}',
+    ]) + '\n'
+    from blind.api import ApiClient
+
+    client = ApiClient("https://x.test", token="t", transport=mock_transport({
+        ("GET", "/api/v1/jobs/job_1/events"): _ndjson_route(body),
+    }))
     data = client.job_events("job_1")
-    assert [e["stage"] for e in data["events"]] == ["queued", "verify_contexts"]
+    assert [event["stage"] for event in data["events"]] == ["queued", "verify_contexts"]
     assert data["events"][1]["novel_key"] == 123
 
 
@@ -184,10 +206,12 @@ def test_jobs_retrieve_shows_failure_reason_row():
         ("GET", "/api/v1/jobs/job_1"): {"id": "job_1", "state": "failed",
                                         "failure_reason": "wall_limit_exceeded"},
     }))
-    r = runner.invoke(app, ["--api-key", "k", "jobs", "retrieve", "job_1"])
+    r = runner.invoke(app, ["--api-key-stdin", "jobs", "retrieve", "job_1"], input="k\n")
     assert r.exit_code == 0, r.stdout
     assert "failure reason" in r.stdout
     assert "wall_limit_exceeded" in r.stdout
     # --json keeps the raw field
-    rj = runner.invoke(app, ["--json", "--api-key", "k", "jobs", "retrieve", "job_1"])
+    rj = runner.invoke(
+        app, ["--json", "--api-key-stdin", "jobs", "retrieve", "job_1"], input="k\n"
+    )
     assert json_out(rj)["failure_reason"] == "wall_limit_exceeded"

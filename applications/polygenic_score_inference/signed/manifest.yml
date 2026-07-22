@@ -1,0 +1,111 @@
+# Blind Machine curated application bundle — polygenic_score_inference.
+#
+# This manifest is the ONLY file the Rails platform parses. The author's pure
+# functions in server.py / local_project_owner.py / local_data_owner.py own the
+# computation; the numbered stage files are kit-owned shims that call them (see
+# docs/rfcs/0002). This file owns the governance + review surface.
+#
+# The PRIVACY-PRESERVING PER-INDIVIDUAL PRS application. It reproduces the
+# computation of Knight et al., "Homomorphic encryption enables privacy
+# preserving polygenic risk scores" (Cell Reports Methods, 2026; HEPRS,
+# github.com/gersteinlab/HEPRS) — a per-individual polygenic risk score
+# PRS_i = sum_j w_j * g_ij — but for the common case where the PRS model is a
+# PUBLIC published model (e.g. a PGS-Catalog / GWAS weight set). Making the model
+# public turns HEPRS's ciphertext x ciphertext product (relinearization, the
+# multiplicative tier) into a ciphertext x PLAINTEXT product (no relin), leaving
+# only an intra-vector rotate-sum. Result: bit-exact BFV scores at a fraction of
+# HEPRS's memory, streamed one contributor at a time.
+name: polygenic_score_inference
+version: 1.0.0
+summary: >-
+  Per-individual polygenic risk scores over encrypted genotypes under a PUBLIC
+  model — a bit-exact, memory-light reproduction of HEPRS (Knight et al. 2026).
+
+builder:
+  type: uv
+  project: env
+
+# Cryptographically additive: ciphertext x PUBLIC plaintext (no relin, no
+# ct x ct) plus an intra-vector rotate-sum (Galois keys). The coarse billing
+# estimator (ComputationRun::SCHEME_FACTORS) buckets this as bfv-add (1.0x); the
+# rotate-sum makes real per-contribution work heavier than a pure additive fold,
+# so that estimate is a conservative floor, not an upper bound.
+crypto: tenseal-bfv
+computation: additive_bfv_rotatesum
+min_contributors: 20
+
+# The published coordinate definition. Every contributor MUST encode against the
+# identical definition (dosage g in {0,1,2}^L) or the per-individual score is
+# meaningless — that invariant is what folding this manifest into the bundle
+# SHA-256 enforces. For the synthetic v1 demo the coordinate list is generated
+# deterministically from `seed`; a real deployment fixes L to the published
+# model's SNP count (e.g. 110,258 for the HEPRS schizophrenia model).
+input:
+  type: integer_vector
+  length: 1000
+  value_domain: [0, 1, 2]       # alt-allele dosage per coordinate; missing -> 0
+  coordinates:
+    kind: synthetic_variants
+    seed: blind-v1-demo-coordinates
+    fields: [chrom, pos, ref, alt]
+
+# The published PUBLIC effect weights — part of the application identity, folded
+# into the digest. Integer-scaled by the fixed-point factor `scale` (S). Real
+# GWAS betas are signed, so weights are signed integers w_scaled[j] in
+# [-range, +range] and the score's sign is recovered on decrypt. For the
+# synthetic demo the vector is generated deterministically from `seed` by
+# server.py's `scaled_weights(length)`; a real deployment ships the published
+# model as a signed `model_weights.json` beside server.py (also folded into the
+# digest). Real-domain effect weight[j] = w_scaled[j] / S.
+weights:
+  scale: 1000                   # fixed-point factor S; real rounding error <= 1/S
+  values:
+    kind: synthetic_weights
+    seed: blind-v1-prs-inference-weights
+    range: [-2000, 2000]        # signed integer-scaled weight bounds (real [-2.0, 2.0])
+  reference:
+    paper: "Knight et al., Cell Reports Methods (2026), DOI 10.1016/j.crmeth.2025.101271"
+    source: "github.com/gersteinlab/HEPRS"
+
+output:
+  shape: per_individual_scores  # one encrypted scalar PRS_i = sum_j w_j * g_ij per contributor
+  exactness: exact              # bit-exact in the integer-scaled domain (BFV, Z_t)
+  tolerance: 0                  # integer score is bit-exact; real error <= 1/S per weight
+
+# Per-individual scoring is the INTENDED output (this is what reproduces HEPRS's
+# per-individual R^2 / AUROC validation), so this is NOT an aggregate-only
+# release — the platform labels it "review required". The key holder (researcher)
+# learns each participant's scalar score, never their genotype; the compute
+# server learns neither. Differencing is mitigated (min-N + cohort freeze + run
+# cap), not fully defended — see SECURITY.md.
+release_policy:
+  aggregate_only: false
+  allowed_runs_per_project: 1   # run cap (differencing mitigation, not a defense)
+
+# Params unchanged from the flagship additive tier (poly 8192, 30-bit t). The one
+# addition is Galois keys (for the rotate-sum), which enlarge the PUBLIC context
+# to ~15-20 MB; the per-contributor ciphertext and the server's resident memory
+# stay small (streamed one contributor at a time).
+resources:
+  max_memory_mb: 8192
+  max_wall_seconds: 3600
+  max_ciphertext_mb: 512
+
+# Collaboration scenario (docs/rfcs/0002 §4.1): who runs which role's functions.
+# `aggregate` = 1 project owner + N data owners. (The scenario name is the role
+# topology, not the output shape: here N data owners each contribute one encrypted
+# genotype and the project owner receives N per-individual scores.)
+scenario:
+  name: aggregate
+  roles:
+    project_owner: { file: local_project_owner.py, functions: [ keygen, decrypt, decode ] }
+    data_owner:    { file: local_data_owner.py,    functions: [ encode, encrypt ] }
+    server:        { file: server.py,              functions: [ compute ] }
+
+# Content-addressing digests. Left null in the committed bundle ON PURPOSE (a
+# computed value here would be self-referential). The authoritative digest NAMES
+# the bundle (application-<name>@<digest>) and is recorded out-of-band
+# (.blind-signature / DB). See applications/README.md.
+hashes:
+  bundle: null
+  env_lock: null

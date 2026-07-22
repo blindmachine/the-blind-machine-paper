@@ -1,0 +1,8 @@
+* @barisozmen
+/.github/workflows/ @barisozmen
+/pyproject.toml @barisozmen
+/uv.lock @barisozmen
+/src/blind/runtime/ @barisozmen
+/src/blind/store.py @barisozmen
+/src/blind/cli/app.py @barisozmen
+

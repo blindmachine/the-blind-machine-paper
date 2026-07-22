@@ -89,6 +89,38 @@ def test_bundle_digest_hashes_signed_payload_and_excludes_support_files(tmp_path
     assert before != after_signed
 
 
+def test_new_contract_digest_is_stable_when_shims_are_materialized(tmp_path):
+    """Regression (trust-loop exit 6): the six kit stage shims are materialized into a
+    NEW-CONTRACT bundle (server.py) at encode/encrypt time and are never signed into
+    it. The recomputed digest MUST stay equal to the author-only one — otherwise a
+    contributor's 2nd upload from the same ~/.blind recomputes a different bundle
+    digest and the RFC 0003 signed-invitation application-digest check fails closed."""
+    from blind.runtime.shims import SHIM_NAMES
+
+    author = tmp_path / "author_only"
+    author.mkdir()
+    (author / "manifest.yml").write_text("name: x\n")
+    (author / "server.py").write_text("def compute(inputs, public_context): return b''\n")
+    (author / "local_data_owner.py").write_text("def encode(x): return x\n")
+    author_only_digest = canonical_bundle_digest(author)
+
+    # what run_encode / run_encrypt do to the payload dir before a stage runs
+    for name in SHIM_NAMES:
+        (author / name).write_text("# kit-owned shim, materialized at run time\n")
+    assert canonical_bundle_digest(author) == author_only_digest
+
+
+def test_legacy_bundle_still_hashes_numbered_files(tmp_path):
+    """A legacy self-contained bundle (no server.py) is NOT shim-excluded — its
+    numbered files are the signed author code and must change the digest."""
+    b = tmp_path / "legacy"
+    b.mkdir()
+    (b / "manifest.yml").write_text("name: y\n")
+    before = canonical_bundle_digest(b)
+    (b / "10_encode.py").write_text("print(1)\n")
+    assert canonical_bundle_digest(b) != before
+
+
 def test_bundle_digest_changes_when_a_stage_changes(tmp_path):
     a = tmp_path / "a"
     a.mkdir()

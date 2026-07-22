@@ -5,8 +5,9 @@ RFC-8628-style device flow:
   2. user approves at /device in a browser
   3. poll POST /api/v1/auth/token  → {access_token} (or {status: "pending"})
 
-Non-interactive: `--api-key <key>` exchanges the key for a bearer token in one
-call. The resulting token is stored at ~/.blind/auth/<profile>.token (chmod 600).
+Non-interactive: `--api-key-stdin` exchanges the key for a bearer token without
+exposing it in process arguments or an arbitrary credential file. The resulting
+token is stored at ~/.blind/auth/<profile>.token (chmod 600).
 """
 
 from __future__ import annotations
@@ -32,6 +33,38 @@ def login_with_api_key(client: ApiClient, api_key: str) -> LoginResult:
         raise AuthError("Auth server did not return an access_token for the API key.")
     account = client.me(token=token)
     return LoginResult(token=token, account=account, method="api_key")
+
+
+def login_with_password(client: ApiClient, email: str, password: str) -> LoginResult:
+    """Exchange prompted/stdin account credentials for a bearer token."""
+    from blind.errors import BlindError
+
+    try:
+        resp = client.exchange_token(email=email, password=password)
+    except BlindError as exc:  # 401 invalid_credentials, rate_limited, …
+        raise AuthError(f"Login failed for {email}: {exc}") from exc
+    token = resp.get("access_token")
+    if not token:
+        raise AuthError("Auth server did not return an access_token.")
+    account = resp.get("account") or client.me(token=token)
+    return LoginResult(token=token, account=account, method="password")
+
+
+def register_with_password(client: ApiClient, email: str, password: str) -> LoginResult:
+    """Create an account using a prompted/stdin password and return a token."""
+    from blind.errors import BlindError
+
+    try:
+        resp = client.register(email=email, password=password)
+    except BlindError as exc:  # 422 (taken / too short), rate_limited, …
+        raise AuthError(
+            f"Could not register {email}: {exc}. If you already have an account, "
+            "run `blind login --email {email}` instead.".format(email=email)) from exc
+    token = resp.get("access_token")
+    if not token:
+        raise AuthError("Registration did not return an access_token.")
+    account = resp.get("account") or {}
+    return LoginResult(token=token, account=account, method="register")
 
 
 def login_with_device(

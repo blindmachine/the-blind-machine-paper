@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import gzip
+
 import httpx
 import pytest
 
+from blind import api as api_module
 from blind.api import ApiClient, parse_field_pairs
-from blind.errors import AuthError, PreconditionError
+from blind.errors import AuthError, PreconditionError, VerificationError
 from tests.conftest import mock_transport
 
 
@@ -52,6 +55,27 @@ def test_public_endpoints_need_no_auth():
         {("GET", "/api/v1/applications"): {"applications": [{"name": "allele_frequency_count"}]}}))
     out = client.list_applications()
     assert out["applications"][0]["name"] == "allele_frequency_count"
+
+
+def test_bundle_download_rejects_oversized_response(monkeypatch):
+    monkeypatch.setattr(api_module, "MAX_BUNDLE_DOWNLOAD_BYTES", 4)
+    client = ApiClient("https://x.test", transport=mock_transport({
+        ("GET", "/api/v1/applications/demo/versions/" + "a" * 64 + "/bundle"):
+            lambda _request: httpx.Response(200, content=b"12345"),
+    }))
+    with pytest.raises(VerificationError):
+        client.download_bundle("demo", "a" * 64)
+
+
+def test_bundle_download_rejects_content_encoding():
+    path = "/api/v1/applications/demo/versions/" + "a" * 64 + "/bundle"
+    client = ApiClient("https://x.test", transport=mock_transport({
+        ("GET", path): lambda _request: httpx.Response(
+            200, content=gzip.compress(b"encoded"), headers={"Content-Encoding": "gzip"}
+        ),
+    }))
+    with pytest.raises(VerificationError):
+        client.download_bundle("demo", "a" * 64)
 
 
 def test_error_mapping():

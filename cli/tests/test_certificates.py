@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from blind.certificates import build_certificate, verify_certificate
+from blind.hashing import certificate_hash
 
 # The cross-language golden fixture: a REAL certificate emitted by the Rails
 # ComputationCertificate#document_json (regenerate from the Rails side with
@@ -14,11 +15,7 @@ from blind.certificates import build_certificate, verify_certificate
 # the wrapped canonical schema-v1 document the public API item endpoint serves.
 # Proving `verify_certificate` accepts it offline is the G8 deliverable.
 _GOLDEN_FIXTURE = (
-    Path(__file__).resolve().parents[2]
-    / "test"
-    / "fixtures"
-    / "files"
-    / "certificate_v1_golden.json"
+    Path(__file__).resolve().parent / "fixtures" / "certificate_v1_golden.json"
 )
 
 
@@ -52,7 +49,7 @@ def test_tampered_result_digest_is_caught():
 def test_tampered_cohort_commitment_is_caught():
     cert = _cert()
     cert["cohort_commitment"] = "sha256:00"
-    cert["certificate_hash"] = __import__("blind.hashing", fromlist=["certificate_hash"]).certificate_hash(cert)
+    cert["certificate_hash"] = certificate_hash(cert)
     v = verify_certificate(cert)
     # cert_hash now consistent, but recomputed cohort commitment != claimed
     assert not v.ok
@@ -62,7 +59,7 @@ def test_tampered_cohort_commitment_is_caught():
 def test_min_n_derived_not_trusted():
     cert = _cert()
     cert["min_contributors_satisfied"] = False  # lies: 3 >= 3 is True
-    cert["certificate_hash"] = __import__("blind.hashing", fromlist=["certificate_hash"]).certificate_hash(cert)
+    cert["certificate_hash"] = certificate_hash(cert)
     v = verify_certificate(cert)
     assert not v.ok
     assert any(c.name == "min_contributors_satisfied" and not c.ok for c in v.checks)
@@ -93,11 +90,7 @@ def _load_golden() -> dict:
 def test_rails_golden_certificate_verifies_offline():
     """A Rails-emitted wrapped certificate verifies with ZERO trust and ZERO
     network — the cross-language contract the paper's G8 milestone depends on."""
-    assert _GOLDEN_FIXTURE.exists(), (
-        "regenerate the Rails golden fixture: "
-        "REGENERATE_CERTIFICATE_GOLDEN=1 bin/rails test "
-        "test/models/computation_certificate_test.rb -n '/golden certificate fixture/'"
-    )
+    assert _GOLDEN_FIXTURE.exists(), "checked-in certificate fixture is missing"
     doc = _load_golden()
     # It is the wrapped canonical document, not a flat cert.
     assert doc["object"] == "computation_certificate"

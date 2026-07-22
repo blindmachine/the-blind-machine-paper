@@ -17,7 +17,12 @@ runner = CliRunner()
 
 def test_https_urls_pass_through():
     assert enforce_https("https://blindmachine.org") == "https://blindmachine.org"
-    assert enforce_https("https://example.test:8443/api") == "https://example.test:8443/api"
+    assert enforce_https("https://example.test:8443") == "https://example.test:8443"
+
+
+def test_api_base_url_refuses_paths():
+    with pytest.raises(UsageError):
+        enforce_https("https://example.test:8443/api")
 
 
 @pytest.mark.parametrize("url", [

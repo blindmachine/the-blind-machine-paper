@@ -97,7 +97,7 @@ def test_emitters_shapes(installed):
 
 # --- 3. Cost model purity (mirrors computation_run.rb:63) --------------------
 
-def test_cost_model_matches_server_formula(monkeypatch):
+def test_cost_model_applies_simulation_base_and_markup(monkeypatch):
     monkeypatch.setenv("COMPUTE_BASE_CENTS_PER_CPU_SECOND", "3.0")
     monkeypatch.setenv("COMPUTE_MARKUP_MULTIPLIER", "2.0")
     cpu = 7.5
@@ -106,9 +106,9 @@ def test_cost_model_matches_server_formula(monkeypatch):
     assert cost.marked_up_cost_cents == math.ceil(cpu * 3.0 * 2.0)  # ceil(cpu × base × markup)
 
 
-def test_cost_model_projection_reconciles_with_server(monkeypatch):
-    # At the default approach/security + reference length, the projected CPU-seconds
-    # equal N × per_contribution — the server's L-agnostic `jobs estimate`.
+def test_cost_model_reference_shape_uses_the_cohort_baseline(monkeypatch):
+    # At the default approach/security + reference length, the simulation
+    # projection begins at N × per_contribution before applying other factors.
     monkeypatch.setenv("COMPUTE_ESTIMATED_CPU_SECONDS_PER_CONTRIBUTION", "1.0")
     monkeypatch.setenv("COMPUTE_BASE_CENTS_PER_CPU_SECOND", "2.0")
     monkeypatch.setenv("COMPUTE_MARKUP_MULTIPLIER", "1.5")

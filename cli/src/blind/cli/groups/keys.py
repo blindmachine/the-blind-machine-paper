@@ -11,8 +11,8 @@ import typer
 
 from blind import console, trust
 from blind.context import Context, emit
-from blind.errors import UsageError
-from blind.hashing import short
+from blind.errors import UsageError, VerificationError
+from blind.hashing import digests_match, sha256_file, sha256_prefixed, short
 from blind.workspace import (
     read_project_meta,
     resolve_project_bundle,
@@ -24,6 +24,29 @@ app = typer.Typer(help="Local crypto context (keygen is 100% local).", no_args_i
 
 def _ctx(c: typer.Context) -> Context:
     return c.obj
+
+
+def _publish_public_material(ctx: Context, project: str) -> tuple[str, str]:
+    key_dir = ctx.store.key_dir(project)
+    public_context = key_dir / "public.context"
+    owner_public = key_dir / "owner_signing.pub"
+    for path, label in (
+        (public_context, "public context"),
+        (owner_public, "owner signing public key"),
+    ):
+        if path.is_symlink() or not path.is_file():
+            raise VerificationError(f"Local {label} is missing or not a regular file: {path}")
+    public_digest = sha256_file(public_context)
+    owner_public_hex = owner_public.read_text().strip().lower()
+    try:
+        owner_public_bytes = bytes.fromhex(owner_public_hex)
+    except ValueError as exc:
+        raise VerificationError("Owner signing public key is malformed") from exc
+    if len(owner_public_bytes) != 32 or owner_public_bytes == b"\0" * 32:
+        raise VerificationError("Owner signing public key is weak or malformed")
+    ctx.client().put_public_context(project, public_digest, public_context.read_bytes())
+    ctx.client().put_owner_key(project, owner_public_hex)
+    return public_digest, owner_public_hex
 
 
 @app.command("create")
@@ -40,15 +63,10 @@ def create(c: typer.Context, project: str = typer.Option(..., "--project"),
 
     kg = run_keygen(ctx.store, project, bundle)
 
-    # Publish only the public half (single PUT of the public context).
-    published = False
-    try:
-        ctx.client().put_public_context(
-            project, kg.public_context_sha256, kg.public_context_path.read_bytes()
-        )
-        published = True
-    except Exception:
-        published = False  # offline: local keys still valid; publish later
+    # Both public artifacts are mandatory. On network failure the private keys stay
+    # local and `keys publish` retries without regenerating them.
+    _publish_public_material(ctx, project)
+    published = True
 
     view = {
         "object": "keys",
@@ -68,27 +86,41 @@ def create(c: typer.Context, project: str = typer.Option(..., "--project"),
     emit(ctx, view, render)
 
 
+@app.command("publish")
+def publish(c: typer.Context, project: str = typer.Option(..., "--project")):
+    """Retry publication of existing public material without regenerating keys."""
+    ctx = _ctx(c)
+    public_digest, owner_public = _publish_public_material(ctx, project)
+    view = {
+        "object": "keys_publication",
+        "project": project,
+        "public_context_sha256": public_digest,
+        "owner_signing_pubkey": owner_public,
+        "published": True,
+    }
+    emit(
+        ctx,
+        view,
+        lambda: console.line(
+            "publish", short(public_digest), "public context + owner signing key", trust="public"
+        ),
+    )
+
+
 @app.command("retrieve")
 def retrieve(c: typer.Context, project: str = typer.Option(..., "--project")):
     ctx = _ctx(c)
     secret, backend = ctx.store.load_secret(project)
     local_pub = ctx.store.key_dir(project) / "public.context"
-    from blind.hashing import digests_match, sha256_file
-
     local_hash = sha256_file(local_pub) if local_pub.exists() else None
-    server_hash = None
-    matches = None
-    try:
-        # The API returns the server's public-context digest under
-        # `public_context_digest` (from the X-Public-Context-Digest header) — the
-        # old `public_context_sha256` key never existed on this response, so the
-        # tamper check silently reported "local only" and could never surface a
-        # MISMATCH. Read the real key and compare with digest normalization so a
-        # server that substituted its own public context is actually detected.
-        server_hash = ctx.client().get_public_context(project).get("public_context_digest")
-        matches = digests_match(server_hash, local_hash) if (server_hash and local_hash) else None
-    except Exception:
-        pass
+    # Fetch failures propagate: reporting "local only" would hide a failed tamper check.
+    # Hash the BYTES we received rather than trusting the server's self-reported
+    # X-Public-Context-Digest header (an untrusted server would just echo a matching
+    # header for tampered bytes).
+    resp = ctx.client().get_public_context(project)
+    server_bytes = resp.get("public_context_bytes") or b""
+    server_hash = sha256_prefixed(server_bytes) if server_bytes else None
+    matches = digests_match(server_hash, local_hash) if (server_hash and local_hash) else None
     view = {
         "object": "keys_status",
         "project": project,
@@ -106,6 +138,10 @@ def retrieve(c: typer.Context, project: str = typer.Option(..., "--project")):
                             "matches server" if matches else ("local only" if matches is None else "MISMATCH"))
 
     emit(ctx, view, render)
+    # A definite local≠server public-context mismatch is a substitution/tamper
+    # signal — fail the exit code instead of only rendering "MISMATCH" in red.
+    if matches is False:
+        raise typer.Exit(code=VerificationError.code)
 
 
 @app.command("list")

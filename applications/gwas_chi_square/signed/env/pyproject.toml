@@ -1,0 +1,32 @@
+[project]
+name = "blind-application-gwas-chi-square"
+version = "1.0.0"
+description = "Blind Machine curated application: gwas_chi_square (TenSEAL additive BFV). Reproduces the Chi-Square GWAS protocol of Blatt et al., PNAS 2020, with an additive-only encrypted circuit (g*y formed locally by each data owner)."
+requires-python = "==3.11.*"
+dependencies = [
+    # The crypto library is an ordinary, uv-locked application dependency — NOT a
+    # platform-provided capability (docs/application_structure.md § "No platform
+    # backends"). Apache-2.0. Same pin as the flagship so the whole registry
+    # shares one audited TenSEAL build.
+    "tenseal==0.3.16",
+    # TenSEAL 0.3.16 imports numpy at package load but does not declare it, so we
+    # pin it explicitly (numpy 1.26.x is the ABI TenSEAL 0.3.16 was built against).
+    "numpy>=1.26,<2",
+]
+
+[dependency-groups]
+# Local-loop / equivalence test tooling. Sealed run phase installs with
+# `uv --project env sync --frozen --no-dev`, so dev deps never enter the sandbox.
+dev = [
+    "pytest>=8,<9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# The numbered stage files live at the bundle root (one directory above env/),
+# so there is no importable package to build here; this is an environment-only
+# project. Bundle stages are executed by path, not imported as a package.
+bypass-selection = true

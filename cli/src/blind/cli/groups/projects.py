@@ -6,14 +6,60 @@ import typer
 
 from blind import console
 from blind.context import Context, emit
-from blind.errors import UsageError
-from blind.hashing import short
+from blind.errors import UsageError, VerificationError
+from blind.hashing import require_result_digest, short
 
 app = typer.Typer(help="Studies + governance.", no_args_is_help=True)
 
 
 def _ctx(c: typer.Context) -> Context:
     return c.obj
+
+
+def sign_and_mint_invite(ctx: Context, project_id: str, *, expires: str = "7d",
+                         count: int = 1, qr: bool = False) -> dict:
+    """Mint a contributor invite signed by the local project-owner key.
+    and a public context is published (RFC 0003). The owner generates the token,
+    signs an intent binding the public-context digest, uploads the signature, and
+    returns a link whose ``#k=`` fragment carries the owner public key. Missing
+    signing state is a hard failure; unsigned contributor links are never minted."""
+    from blind import invitations as inv
+
+    priv, _backend = ctx.store.load_signing_key(project_id)
+    pub_path = ctx.store.key_dir(project_id) / "owner_signing.pub"
+    if not priv or not pub_path.exists():
+        raise VerificationError(
+            "Project owner signing key is missing; run `blind keys create --project <id>`"
+        )
+
+    project = ctx.client().retrieve_project(project_id)
+    public_context_digest = project.get("public_context_digest")
+    if not public_context_digest:
+        raise VerificationError(
+            "Project has no published public-context digest; refusing to mint an unsigned invite"
+        )
+
+    token = inv.new_token()
+    expires_at = inv.expiry_iso(expires)
+    intent = inv.build_intent(
+        project_id=str(project_id),
+        token=token,
+        application_digest=project.get("application_digest", ""),
+        public_context_digest=public_context_digest,
+        context_epoch=int(project.get("context_epoch", 0)),
+        min_contributors=int(project.get("min_contributors", 0)),
+        expires_at=expires_at,
+    )
+    signature = inv.owner_sign(priv, intent)
+    data = ctx.client().invite_project(
+        project_id, token=token, owner_signature=signature,
+        signed_intent=intent, expires=expires,
+    )
+    owner_pub = pub_path.read_text().strip()
+    data["url"] = inv.build_invite_link(data.get("url", data.get("link", "")), owner_pub)
+    data["signed"] = True
+    data["owner_key_fingerprint"] = inv.key_fingerprint(owner_pub)
+    return data
 
 
 @app.command("create")
@@ -127,15 +173,18 @@ def freeze(c: typer.Context, id: str, yes: bool = typer.Option(False, "--yes", "
 def invite(c: typer.Context, id: str, expires: str = typer.Option("7d", "--expires"),
            qr: bool = typer.Option(False, "--qr"), count: int = typer.Option(1, "--count")):
     ctx = _ctx(c)
-    data = ctx.client().invite_project(id, expires=expires, count=count, qr=qr)
+    data = sign_and_mint_invite(ctx, id, expires=expires, count=count, qr=qr)
     view = {"object": "invitation", **data}
 
     def render():
-        console.panel("Contributor invite", [
+        rows = [
             ("link", data.get("url", data.get("link", ""))),
             ("project id", id),
             ("expires", data.get("expires_at", data.get("expires", expires))),
-        ], kind="info")
+        ]
+        if data.get("signed"):
+            rows.append(("signed", f"✔ keyholder {data.get('owner_key_fingerprint', '')}"))
+        console.panel("Contributor invite", rows, kind="info")
 
     emit(ctx, view, render)
 
@@ -158,6 +207,10 @@ def events(c: typer.Context, id: str, since: str = typer.Option(None, "--since")
                                 "hash chain intact" if chain_ok else "CHAIN BROKEN")
 
     emit(ctx, view, render)
+    # A broken append-only chain must fail the exit code too, not just print red:
+    # `blind verify --project <id>` is a gate a reviewer/CI can script on.
+    if verify and not chain_ok:
+        raise typer.Exit(code=VerificationError.code)
 
 
 def _verify_event_chain(events: list[dict]) -> bool:
@@ -265,7 +318,7 @@ def start(
     except Exception:
         if ctx.json:
             raise
-        applications_install(c, name=application, version=None, force=False, no_seal=False)
+        applications_install(c, name=application, version=None, force=False)
 
     # 2. create the project pinned to the application digest.
     proj = ctx.client().create_project(application=application, name=name,
@@ -279,12 +332,14 @@ def start(
     kg = run_keygen(ctx.store, project_id, bundle)
     ctx.client().put_public_context(project_id, kg.public_context_sha256,
                                     kg.public_context_path.read_bytes())
+    # Registration is mandatory: this guided flow never falls back to unsigned links.
+    ctx.client().put_owner_key(project_id, kg.owner_signing_pubkey)
     if human:
         console.line("create", "keypair", "secret in ~/.blind", trust="private")
         console.line("publish", short(kg.public_context_sha256), "public context", trust="public")
 
-    # 4. mint the contributor link.
-    inv = ctx.client().invite_project(project_id, expires="7d", count=1)
+    # 4. mint the contributor link (SIGNED when the owner key + context are in place).
+    inv = sign_and_mint_invite(ctx, project_id, expires="7d", count=1)
     link = inv.get("url", inv.get("link", ""))
 
     contribute_cmd = f"blind contribute {link} ./their_vector.csv"
@@ -384,6 +439,10 @@ def run(
     result = ctx.client().retrieve_result(job_id)
     ct = result.get("ciphertext_bytes", b"")
     ct = ct.encode() if isinstance(ct, str) else bytes(ct)
+    # Fail closed on the server-delivered ciphertext BEFORE it touches the local
+    # secret key: an absent OR mismatched result digest refuses the bytes (a
+    # hostile server can strip the digest as easily as it can swap the payload).
+    require_result_digest(result.get("result_digest", ""), ct)
     bundle = resolve_project_bundle(ctx.store, id)
     result_dir = ctx.store.result_dir(id, job_id)
     result_dir.mkdir(parents=True, exist_ok=True)

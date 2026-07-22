@@ -18,13 +18,10 @@ shapers, and ``oracle_check``) as a compact, manifest-selected descriptor:
                             fold. One-blob-per-contributor folds are order-
                             independent, so shipped applications keep the default;
   * ``result_keys``       — the decode keys to pull the comparable vector from;
-  * ``oracle``            — the cleartext oracle for exactness. Every oracle here
-                            reuses the bundle's OWN pure ``encode()`` (and, for
-                            polygenic_score_aggregate, its ``scaled_weights()``) —
-                            the identical functions the bundle's own
-                            ``tests/test_local_loop.py`` and the paper's direct
-                            driver check against — so the oracle can never drift
-                            from the shipped encoding.
+  * ``oracle``            — the trusted CLI's cleartext reconstruction from the
+                            signed declarative manifest. Bundle Python is never
+                            imported into the host interpreter; disagreement with
+                            the sandboxed encrypted pipeline fails equivalence.
 
 Selection is manifest-driven (general signals, never a hard-coded application name):
 
@@ -37,17 +34,15 @@ Selection is manifest-driven (general signals, never a hard-coded application na
     (first-moment ``sum_g`` is the additive aggregate checked for exactness);
   * everything else → the DEFAULT additive single-output shape (allele frequency).
 
-Each oracle loads the bundle's pure author functions in-process. Under the
-RFC-0002 contract these live in the author modules (``local_data_owner.encode``,
-``server.scaled_weights``), which have no top-level TenSEAL import and no
-intra-bundle sibling imports, so they load in the CLI interpreter by file path
-without the sealed crypto dependency.
+Application-controlled Python is executed only by the container sandbox. These
+oracles intentionally duplicate small, manifest-declared transformations in
+trusted CLI code; a drift becomes an equivalence failure rather than host code
+execution.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import pathlib
+import random
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
@@ -58,68 +53,12 @@ _DEFAULT_RESULT_KEYS = (
 )
 
 
-# Which author module each stage's pure function primarily lives in under the
-# RFC-0002 contract. The numbered stage files are now thin import shims, so the
-# real functions live here. Author modules are TenSEAL-free at import time and
-# have no sibling imports, so they exec by path with no sys.path mutation and no
-# cross-bundle module-name collision.
-_STAGE_AUTHOR_FILE = {
-    "encode": "local_data_owner.py", "encrypt": "local_data_owner.py",
-    "keygen": "local_project_owner.py", "decrypt": "local_project_owner.py",
-    "decode": "local_project_owner.py", "compute": "server.py",
-}
-_AUTHOR_FILES = ("server.py", "local_project_owner.py", "local_data_owner.py")
-
-
-def _bundle_fn(bundle, stage: str, attr: str):
-    """Load a bundle's pure author function (e.g. ``local_data_owner.encode``,
-    ``server.scaled_weights``) in-process.
-
-    Tries the stage's primary author module first, then the other author modules,
-    then the numbered stage file (for a pre-contract bundle). Cached per
-    (bundle digest, stage, attr) to avoid re-exec on every cohort member."""
-    key = (getattr(bundle, "digest", bundle.name), stage, attr)
-    cache = _bundle_fn._cache  # type: ignore[attr-defined]
-    if key in cache:
-        return cache[key]
-
-    root = pathlib.Path(bundle.root)
-    ordered = [_STAGE_AUTHOR_FILE.get(stage), *_AUTHOR_FILES]
-    seen: set[str] = set()
-    candidates: list[pathlib.Path] = []
-    for name in ordered:
-        if name and name not in seen and (root / name).is_file():
-            seen.add(name)
-            candidates.append(root / name)
-    if not candidates:  # pre-contract bundle — fall back to the numbered stage file
-        candidates = [bundle.stage_file(stage)]
-
-    fn = None
-    for path in candidates:
-        spec = importlib.util.spec_from_file_location(
-            f"{bundle.name}_{path.stem}_{attr}_{abs(hash(key))}", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        if hasattr(module, attr):
-            fn = getattr(module, attr)
-            break
-    if fn is None:
-        raise AttributeError(
-            f"{attr!r} not found in {[p.name for p in candidates]} for {bundle.name}")
-    cache[key] = fn
-    return fn
-
-
-_bundle_fn._cache = {}  # type: ignore[attr-defined]
-
-
 @dataclass
 class ApplicationIO:
     """A compact descriptor of one application's stage I/O shape.
 
-    ``application_io_for`` binds ``bundle`` before returning the descriptor so the
-    oracle can reuse the bundle's own pure ``encode()`` — no need to plumb the
-    bundle through ``compute_oracle``'s call site."""
+    ``application_io_for`` binds ``bundle`` so the oracle can read only its signed,
+    declarative manifest."""
 
     name: str
     raw_for: Callable[[list[int]], Any]
@@ -149,21 +88,40 @@ class ApplicationIO:
         return run_cleartext_oracle(cohort, computation)
 
 
-# --- oracles (each reuses the bundle's OWN pure encode) -----------------------
+# --- trusted manifest-driven cleartext oracles ---------------------------------
+
+
+def _encoded_vector(io: "ApplicationIO", vec: list[int], length: int) -> list[int]:
+    if len(vec) > length:
+        raise ValueError("synthetic vector exceeds the manifest coordinate length")
+    domain = (getattr(io.bundle.manifest, "raw", {}) or {}).get("input", {}).get(
+        "value_domain", [0, 1, 2]
+    )
+    encoded: list[int] = []
+    for value in vec:
+        # `value_domain` describes the ENCODED value space, so apply the manifest's
+        # encoding (carrier-indicator thresholds a {0,1,2} genotype dosage to {0,1})
+        # BEFORE the domain check — otherwise a legitimate raw dosage of 2 is wrongly
+        # rejected against a carrier app's [0,1] domain. The check still fails closed
+        # on any encoded value the manifest doesn't permit.
+        encoded_value = 1 if io.name == "carrier-indicator" and value >= 1 else int(value)
+        if encoded_value not in domain:
+            raise ValueError(f"encoded value {encoded_value!r} is outside the manifest domain")
+        encoded.append(encoded_value)
+    return encoded + [0] * (length - len(encoded))
 
 
 def _encode_and_sum(io: "ApplicationIO", cohort: list[list[int]], _computation: str) -> list:
-    """Coordinate-wise additive fold of the bundle's OWN encoded vectors.
+    """Coordinate-wise additive fold of the manifest-declared encoding.
 
     Correct for every additive single-output application regardless of what
     ``encode`` does per coordinate: allele_frequency_count (dosage passthrough),
     carrier_count (dosage → {0,1} indicator), and the first-moment ``sum_g`` of
     allele_frequency_with_variance all reduce to Σ_i encode(vec_i)."""
     length = len(cohort[0]) if cohort else 0
-    encode = _bundle_fn(io.bundle, "encode", "encode")
     counts = [0] * length
     for vec in cohort:
-        for j, v in enumerate(encode(list(vec), length)):
+        for j, v in enumerate(_encoded_vector(io, list(vec), length)):
             counts[j] += v
     return counts
 
@@ -171,25 +129,30 @@ def _encode_and_sum(io: "ApplicationIO", cohort: list[list[int]], _computation: 
 def _histogram_oracle(io: "ApplicationIO", cohort: list[list[int]], _computation: str) -> list:
     """One-hot additive histogram over each contributor's bucket index."""
     length = len(cohort[0]) if cohort else 0
-    encode = _bundle_fn(io.bundle, "encode", "encode")
     counts = [0] * length
     for vec in cohort:
-        for j, v in enumerate(encode(_histogram_bucket(vec, length), length)):
-            counts[j] += v
+        counts[_histogram_bucket(vec, length)] += 1
     return counts
 
 
 def _pgs_oracle(io: "ApplicationIO", cohort: list[list[int]], _computation: str) -> list:
-    """Public-weighted aggregate: w_scaled[j] · Σ_i g_ij, using the bundle's own
-    dosage ``encode`` and published ``scaled_weights``."""
+    """Public-weighted aggregate reconstructed from signed manifest parameters."""
     length = len(cohort[0]) if cohort else 0
-    encode = _bundle_fn(io.bundle, "encode", "encode")
-    scaled_weights = _bundle_fn(io.bundle, "compute", "scaled_weights")
     counts = [0] * length
     for vec in cohort:
-        for j, v in enumerate(encode(list(vec), length)):
+        for j, v in enumerate(_encoded_vector(io, list(vec), length)):
             counts[j] += v
-    weights = scaled_weights(length)
+    raw = getattr(io.bundle.manifest, "raw", {}) or {}
+    weights_config = raw.get("weights") or raw.get("input", {}).get("weights") or {}
+    values = weights_config.get("values") or {}
+    seed = values.get("seed")
+    bounds = values.get("range")
+    if not isinstance(seed, str) or not isinstance(bounds, list) or len(bounds) != 2:
+        raise ValueError("weighted application manifest lacks a deterministic seed/range")
+    lower, upper = (int(bounds[0]), int(bounds[1]))
+    # These are deterministic public benchmark weights, not security randomness.
+    rng = random.Random(seed)  # nosec B311
+    weights = [rng.randint(lower, upper) for _ in range(length)]
     return [weights[j] * counts[j] for j in range(length)]
 
 
@@ -293,6 +256,5 @@ def _template_for(bundle) -> ApplicationIO:
 
 def application_io_for(bundle) -> ApplicationIO:
     """Select the I/O descriptor for a bundle from its manifest (general signals
-    first, never a hard-coded application name) and bind the bundle so oracles can
-    reuse its own pure ``encode``/``scaled_weights``."""
+    first, never a hard-coded application name) and bind its declarative manifest."""
     return replace(_template_for(bundle), bundle=bundle)

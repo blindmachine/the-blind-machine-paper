@@ -19,19 +19,24 @@ from the bytes on disk.
       "certificate_hash": "<64 hex>",
       "issued_at": "2026-07-05T00:00:00Z",
       "certificate": {
-        "cohort_commitment":     "<64 hex>",
-        "cohort_size":           20,
-        "computation_run_id":    456,
-        "min_contributors":      20,
-        "min_n_satisfied":       true,
-        "project_id":            123,
-        "application_digest":    "<64 hex>",
-        "public_context_digest": "<64 hex>",
-        "release_policy":        "aggregate_only",
-        "result_digest":         "<64 hex>",
-        "run_count":             1
+        "application_digest":       "<64 hex>",
+        "cohort_commitment":        "<64 hex>",
+        "cohort_size":              20,
+        "computation_run_id":       456,
+        "min_contributors":         20,
+        "min_n_satisfied":          true,
+        "owner_signing_key_digest": "<64 hex>",
+        "project_id":               123,
+        "public_context_digest":    "<64 hex>",
+        "release_policy":           "aggregate_only",
+        "result_digest":            "<64 hex>",
+        "run_count":                1
       }
     }
+    The bound body carries the twelve fields of Table 3 of the paper.
+    ``owner_signing_key_digest`` (the keyholder's public signing key, RFC 0003) is
+    ``null`` for an unsigned project; the hash is taken over whatever keys are
+    present, keys sorted, so both the signed (12-key) and unsigned forms verify.
 
 2. A flat certificate body (the bound fields at the top level, carrying its own
    ``certificate_hash``) — the shape ``build_certificate`` produces for fixtures

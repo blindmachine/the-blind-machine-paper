@@ -21,7 +21,8 @@ from __future__ import annotations
 import json
 import random
 import resource
-import subprocess
+import shutil
+import subprocess  # nosec B404
 import sys
 import time
 from dataclasses import dataclass, field
@@ -148,7 +149,8 @@ def generate_cohort(spec: CohortSpec) -> list[list[int]]:
     """
     salt = _coordinate_salt(spec)
     seed = spec.seed if not salt else spec.seed ^ (int(sha256_hex(salt.encode()), 16) & 0xFFFFFFFF)
-    rng = random.Random(seed)
+    # Reproducibility is required here; these values are synthetic, not secrets.
+    rng = random.Random(seed)  # nosec B311
     # Per-coordinate allele frequencies (Beta-ish spectrum → both common + rare).
     if spec.maf_dist == "beta":
         freqs = [rng.betavariate(0.5, 2.0) for _ in range(spec.length)]
@@ -444,9 +446,12 @@ def _coordinate_hash(bundle: Bundle) -> str:
 def git_commit() -> str | None:
     """The simulator's git commit for the provenance header (docs/simulation_mode.md
     §3). Read-only; degrades to None outside a git checkout."""
+    git = shutil.which("git")
+    if not git:
+        return None
     try:
-        out = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+        out = subprocess.run(  # nosec B603
+            [git, "rev-parse", "HEAD"],
             cwd=str(Path(__file__).resolve().parent),
             capture_output=True, text=True, timeout=5,
         )
@@ -508,7 +513,6 @@ def _threat_model_md() -> str:
         "FHE hides contributor inputs from the server. It does NOT hide the "
         "released aggregate, metadata, or protect against a malicious keyholder. "
         "The append-1 sentinel is an integrity check, not a MAC. "
-        "Verify-by-re-execution proves determinism, not zero-knowledge. "
         "Cohort freeze + min-N + run-cap mitigate but do not fully close K-vs-K+1 "
         "differencing; overlapping/Sybil differencing across separately frozen "
         "cohorts needs DP + cross-job query budgets (v2).\n"

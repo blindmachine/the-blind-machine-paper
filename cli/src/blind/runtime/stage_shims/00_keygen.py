@@ -17,7 +17,8 @@ import pathlib
 
 from local_project_owner import keygen
 
-SECRET_CONTEXT_FILENAME = "secret_context.tenseal"  # PRIVATE — never leaves the owner
+# This is a serialized context filename, not a credential literal.
+SECRET_CONTEXT_FILENAME = "secret_context.tenseal"  # nosec B105
 PUBLIC_CONTEXT_FILENAME = "public_context.tenseal"  # PUBLIC — the only half published
 
 

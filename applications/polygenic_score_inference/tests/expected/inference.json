@@ -1,0 +1,25 @@
+{
+  "application": "polygenic_score_inference",
+  "coordinates_length": 16,
+  "weight_scale": 1000,
+  "n_contributors": 4,
+  "scaled_scores": [
+    1806,
+    2312,
+    325,
+    3668
+  ],
+  "per_individual_prs": [
+    1.806,
+    2.312,
+    0.325,
+    3.668
+  ],
+  "mean_prs": 2.02775,
+  "sd_prs": 1.195799810796105,
+  "min_prs": 0.325,
+  "q25_prs": 1.43575,
+  "median_prs": 2.059,
+  "q75_prs": 2.651,
+  "max_prs": 3.668
+}
